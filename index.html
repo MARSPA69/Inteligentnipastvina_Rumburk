@@ -175,7 +175,7 @@
             align-items: center;
             justify-content: center;
             text-align: center;
-            background: linear-gradient(135deg, #2e5a1e 0%, #3d7a2a 30%, #4a8c34 50%, #5a9e3e 70%, #6aad4a 100%);
+            background: linear-gradient(135deg, #1a3d1a 0%, #265e26 35%, #2d6e2d 60%, #357a35 100%);
             position: relative;
             overflow: hidden;
             padding: 120px 24px 80px;
@@ -186,11 +186,21 @@
             position: absolute;
             top: 0;
             left: 0;
+            width: 100%;
+            height: 100%;
+            background-image: url("data:image/svg+xml,%3Csvg width='80' height='80' viewBox='0 0 80 80' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%234a9e4a' fill-opacity='0.12'%3E%3Cpath d='M40 10c0 8-6 14-6 14s-6-6-6-14S34 0 34 0s6 2 6 10zM20 50c0 6-4 10-4 10s-4-4-4-10 4-10 4-10 4 4 4 10zM60 40c0 7-5 12-5 12s-5-5-5-12 5-12 5-12 5 5 5 12zM10 25c0 5-3 8-3 8s-3-3-3-8 3-8 3-8 3 3 3 8zM70 65c0 5-3 8-3 8s-3-3-3-8 3-8 3-8 3 3 3 8z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+            opacity: 0.6;
+        }
+
+        .hero::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
             right: 0;
             bottom: 0;
-            background: radial-gradient(ellipse at 20% 80%, rgba(139, 195, 74, 0.25) 0%, transparent 50%),
-                        radial-gradient(ellipse at 80% 20%, rgba(76, 175, 80, 0.2) 0%, transparent 50%),
-                        radial-gradient(ellipse at 50% 100%, rgba(255, 235, 59, 0.08) 0%, transparent 40%);
+            background: radial-gradient(ellipse at 30% 70%, rgba(76, 175, 80, 0.15) 0%, transparent 50%),
+                        radial-gradient(ellipse at 70% 30%, rgba(139, 195, 74, 0.1) 0%, transparent 50%);
         }
 
         .hero-content {
