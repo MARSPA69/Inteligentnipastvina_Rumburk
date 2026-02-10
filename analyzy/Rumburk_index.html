@@ -1,0 +1,4599 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Rumburk - Cattle Tracking</title>
+
+  <!-- Favicons -->
+  <link rel="icon" type="image/x-icon" href="../favicon.ico">
+
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css">
+
+  <!-- AdminLTE CSS -->
+  <link rel="stylesheet" href="../css/adminlte.css" />
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
+  <!-- Leaflet.draw CSS for polygon drawing tools -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.css" />
+
+  <!-- Tailwind CSS -->
+  <link rel="stylesheet" href="../SSHR_Bohuslavice/tailwind.css">
+  <!-- MQTT client (WebSocket) -->
+  <script src="https://unpkg.com/mqtt@5.1.3/dist/mqtt.min.js"></script>
+
+  <script>
+    window.SSHR_CONFIG = window.SSHR_CONFIG || {};
+    window.SSHR_CONFIG.jupiter = {
+      enabled: true,
+      mockMode: false,
+      baseUrl: 'https://192.168.1.93:5050',
+      token: 'a46e7f9bda78b0cb9324f7899c22968ecb5a7932f8f3f2331ab5c1efb0e3b7de',
+      exportInterval: 30000
+    };
+    window.SSHR_CONFIG.mqtt = {
+      enabled: true,
+      mockMode: false,
+      token: 'a46e7f9bda78b0cb9324f7899c22968ecb5a7932f8f3f2331ab5c1efb0e3b7de',
+      primaryHost: 'ds2203-mspan-01',
+      fallbackHosts: ['192.168.60.3', 'localhost'],
+      wsPort: 9002,
+      tcpPort: 1884,
+      username: 'cepro',
+      password: 'SILNE-HESLO',
+      restEndpoints: [
+        'https://192.168.1.93:5050',
+        'https://ds2203-mspan-01:5050'
+      ],
+      transports: ['websocket', 'rest'],
+      connectionTimeoutMs: 7000
+    };
+  </script>
+
+  <!-- Turf.js for geospatial calculations -->
+  <script src="https://cdn.jsdelivr.net/npm/@turf/turf@6.5.0/turf.min.js"></script>
+
+  <!-- Anime.js for smooth animations -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+  <!-- GSAP for advanced animations -->
+  <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.0/dist/gsap.min.js"></script>
+
+  <!-- Hammer.js for touch gestures -->
+  <script src="https://unpkg.com/hammerjs@2.0.8/hammer.min.js"></script>
+
+  <!-- Moment.js for time formatting -->
+  <script src="https://cdn.jsdelivr.net/npm/moment@2.29.4/moment.min.js"></script>
+
+  <!-- Lodash utilities -->
+  <script src="https://cdn.jsdelivr.net/npm/lodash@4.17.21/lodash.min.js"></script>
+
+  <!-- Custom SSHR Styles -->
+  <link rel="stylesheet" href="../SSHR_Bohuslavice/sshr_styles.css">
+
+  <style>
+    /* SSHR Custom Theme */
+    body {
+      background-color: #1c1917; /* stone-900 */
+      color: #14b8a6; /* teal-500 */
+    }
+
+    #run-panel-content button,
+    #speed-panel-content button {
+      color: #ffffff !important;
+    }
+    #run-panel-content button span,
+    #speed-panel-content button span {
+      color: #ffffff !important;
+    }
+
+
+    /* Cattle marker container */
+    .custom-marker-icon {
+      background: transparent !important;
+      border: none !important;
+      text-align: center;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .custom-marker-icon i {
+      filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.3));
+    }
+
+    /* Cattle-specific marker styles */
+    .cattle-icon {
+      z-index: 1000 !important;
+    }
+
+    .cattle-marker-icon {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      width: 32px;
+      height: 32px;
+    }
+
+    .cattle-marker-glyph {
+      transition: all 0.3s ease;
+    }
+
+    .cattle-marker-icon:hover .cattle-marker-glyph {
+      transform: scale(1.2);
+      filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.6)) !important;
+    }
+
+    /* Cattle color legend */
+    .cattle-legend {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(15, 23, 42, 0.9);
+      border-radius: 8px;
+      padding: 10px 15px;
+      z-index: 1000;
+      border: 1px solid rgba(148, 163, 184, 0.3);
+    }
+
+    .cattle-legend-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin: 5px 0;
+      color: #e2e8f0;
+      font-size: 0.85rem;
+    }
+
+    .cattle-legend-color {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .forensic-dataset-panel .dropdown-toggle {
+      background: rgba(15, 23, 42, 0.85);
+      border-radius: 0.75rem;
+      border: 1px solid rgba(148, 163, 184, 0.35);
+      color: #e2e8f0;
+      font-weight: 600;
+      letter-spacing: 0.02em;
+      padding: 0.55rem 0.9rem;
+      text-align: left;
+      width: 93%;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      transition: all 0.25s ease-in-out;
+    }
+
+    .forensic-dataset-panel .dropdown-toggle:hover,
+    .forensic-dataset-panel .dropdown-toggle:focus {
+      background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(59, 130, 246, 0.18));
+      border-color: rgba(14, 165, 233, 0.65);
+      color: #f8fafc;
+      box-shadow: 0 10px 24px rgba(14, 165, 233, 0.35);
+    }
+
+    .forensic-dataset-panel .dropdown-menu {
+      background: rgba(15, 23, 42, 0.95);
+      border-radius: 0.75rem;
+      border: 1px solid rgba(15, 118, 110, 0.35);
+      padding: 0.35rem 0;
+      box-shadow: 0 18px 35px rgba(15, 23, 42, 0.45);
+    }
+
+    .forensic-dataset-panel .dropdown-item {
+      color: #cbd5f5;
+      font-size: 0.85rem;
+      padding: 0.5rem 1rem;
+    }
+
+    .forensic-dataset-panel .dropdown-item:hover {
+      background: rgba(45, 212, 191, 0.15);
+      color: #f8fafc;
+    }
+
+    .forensic-dataset-empty {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px dashed rgba(148, 163, 184, 0.4);
+      border-radius: 0.85rem;
+      padding: 0.9rem;
+      text-align: center;
+      color: rgba(148, 163, 184, 0.9);
+      font-size: 0.78rem;
+      letter-spacing: 0.05em;
+      text-transform: uppercase;
+    }
+    .forensic-toggle-content {
+      display: flex;
+      flex-direction: column;
+      width: 100%;
+    }
+    .forensic-toggle-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+    }
+    .forensic-toggle-bottom {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.75rem;
+      margin-top: 0.35rem;
+    }
+    .forensic-date-label {
+      font-size: 0.95rem;
+    }
+    .forensic-range-label {
+      font-size: 0.68rem;
+      color: rgba(148, 163, 184, 0.85);
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+    }
+    .forensic-status-badge {
+      font-size: 0.63rem;
+      padding: 0.22rem 0.45rem;
+      border-radius: 999px;
+      border: 1px solid transparent;
+      background: rgba(148, 163, 184, 0.16);
+      color: #cbd5f5;
+      transition: all 0.2s ease-in-out;
+    }
+    .forensic-status-badge.available {
+      border-color: rgba(148, 163, 184, 0.28);
+    }
+    .forensic-status-badge.selected {
+      background: rgba(34, 197, 94, 0.18);
+      color: #4ade80;
+      border-color: rgba(34, 197, 94, 0.35);
+    }
+
+    .zone-confirm-panel {
+      width: 260px;
+      background: rgba(30, 27, 75, 0.95);
+      border-radius: 12px;
+      border: 1px solid rgba(129, 140, 248, 0.35);
+      box-shadow: 0 14px 32px rgba(15, 23, 42, 0.55);
+      overflow: hidden;
+      backdrop-filter: blur(3px);
+    }
+
+    .zone-confirm-panel__header {
+      background: rgba(30, 27, 75, 0.9);
+      color: #e0e7ff;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.78rem;
+      padding: 0.75rem 1rem;
+      border-bottom: 1px solid rgba(99, 102, 241, 0.35);
+    }
+
+    .zone-confirm-panel__body {
+      padding: 0.85rem 1rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+    }
+
+    .zone-confirm-panel__group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .zone-confirm-panel__label {
+      font-size: 0.68rem;
+      color: #c7d2fe;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      font-weight: 600;
+    }
+
+    .zone-select {
+      width: 100%;
+      border: none;
+      border-radius: 10px;
+      padding: 0.55rem 0.65rem;
+      font-size: 0.85rem;
+      color: #ffffff;
+      font-weight: 600;
+      outline: none;
+      appearance: none;
+      background-image: linear-gradient(45deg, rgba(15, 23, 42, 0.25), rgba(15, 23, 42, 0.15));
+      box-shadow: inset 0 2px 6px rgba(15, 23, 42, 0.45);
+      cursor: pointer;
+    }
+
+    .zone-select option {
+      color: #0f172a;
+      font-weight: 500;
+    }
+
+    .zone-select--confirm {
+      background-color: #047857;
+    }
+
+    .zone-select--cancel {
+      background-color: #b45309;
+    }
+
+    .zone-action {
+      border: none;
+      border-radius: 10px;
+      padding: 0.5rem 0.65rem;
+      font-size: 0.82rem;
+      font-weight: 600;
+      color: #ffffff;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 0.35rem;
+      transition: transform 0.2s ease, box-shadow 0.2s ease, filter 0.2s ease;
+      cursor: pointer;
+    }
+
+    .zone-action:disabled {
+      opacity: 0.55;
+      cursor: not-allowed;
+      box-shadow: none;
+      transform: none;
+      filter: saturate(65%);
+    }
+
+    .zone-action--confirm {
+      background: linear-gradient(135deg, #10b981, #047857);
+      box-shadow: 0 8px 20px rgba(16, 185, 129, 0.35);
+    }
+
+    .zone-action--confirm:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(16, 185, 129, 0.45);
+    }
+
+    .zone-action--cancel {
+      background: linear-gradient(135deg, #f59e0b, #b45309);
+      box-shadow: 0 8px 20px rgba(245, 158, 11, 0.35);
+    }
+
+    .zone-action--cancel:not(:disabled):hover {
+      transform: translateY(-1px);
+      box-shadow: 0 12px 26px rgba(245, 158, 11, 0.45);
+    }
+
+    .zone-action--waiting {
+      opacity: 0.75;
+      filter: saturate(70%);
+      cursor: pointer;
+    }
+
+    .zone-confirm-panel__footer {
+      margin-top: 0.2rem;
+      text-align: center;
+      font-size: 0.78rem;
+      font-weight: 600;
+      color: #fef3c7;
+      letter-spacing: 0.04em;
+    }
+
+    /* Sidebar width increased by 20% */
+    .col-lg-2 {
+      flex: 0 0 auto;
+      width: 20% !important;
+      background-color: #2563eb !important; /* blue-600 */
+      padding: 0 !important;
+      height: calc(100vh - 60px) !important;
+      overflow: hidden !important;
+    }
+
+    .col-lg-10 {
+      flex: 0 0 auto;
+      width: 80% !important;
+    }
+
+    /* Sidebar text white */
+    .col-lg-2 * {
+      color: white !important;
+    }
+
+    .col-lg-2 .form-select,
+    .col-lg-2 .form-control {
+      background-color: rgba(255, 255, 255, 0.1) !important;
+      border-color: rgba(255, 255, 255, 0.3) !important;
+      color: white !important;
+    }
+
+    /* Widget Styling - zmenšeno o 40% */
+    .small-box.compact-widget {
+      margin-bottom: 10px !important;
+      min-height: 150px !important;
+      max-height: 150px !important;
+      border-radius: 12px !important;
+      border: 2px solid rgba(255, 255, 255, 0.3) !important;
+      box-shadow:
+        0 8px 16px rgba(0, 0, 0, 0.4),
+        0 2px 4px rgba(0, 0, 0, 0.2),
+        inset 0 2px 4px rgba(255, 255, 255, 0.25),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.25) !important;
+      transition: all 0.3s ease !important;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .small-box.compact-widget:hover {
+      transform: translateY(-2px);
+      box-shadow:
+        0 12px 24px rgba(0, 0, 0, 0.5),
+        0 4px 8px rgba(0, 0, 0, 0.3),
+        inset 0 2px 4px rgba(255, 255, 255, 0.3),
+        inset 0 -2px 4px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .small-box-icon {
+      font-size: 25px !important;
+      top: 5px !important;
+      right: 5px !important;
+      opacity: 0.2 !important;
+    }
+
+    /* Inner styling for widgets - 40% smaller */
+    .small-box .inner {
+      padding: 10px !important;
+      min-height: 80px !important;
+    }
+
+    .small-box .inner h3 {
+      color: white !important;
+      font-size: 1.5rem !important; /* 40% smaller from 2.5rem */
+      font-weight: 600 !important;
+      margin-bottom: 5px !important;
+    }
+
+    .small-box .inner p {
+      color: rgba(255, 255, 255, 0.95) !important;
+      font-size: 14px !important; /* changed from 0.66rem */
+    }
+
+    /* Gradient backgrounds for widgets */
+    .text-bg-primary {
+      background: linear-gradient(135deg, #0d6efd 0%, #0a58ca 100%) !important;
+    }
+
+    .text-bg-success {
+      background: linear-gradient(135deg, #198754 0%, #146c43 100%) !important;
+    }
+
+    .text-bg-warning {
+      background: linear-gradient(135deg, #ffc107 0%, #ff9800 100%) !important;
+    }
+
+    .text-bg-danger {
+      background: linear-gradient(135deg, #dc3545 0%, #b02a37 100%) !important;
+    }
+
+    /* All text in teal-500 */
+    h1, h2, h3, h4, h5, h6, p, span, div, label {
+      color: #14b8a6;
+    }
+
+    /* Map wrapper - plná výška až ke spodku obrazovky */
+    #leafletMap {
+      border: 2px solid #14b8a6;
+      border-radius: 8px;
+      height: 100% !important; /* plná výška parent containeru */
+      min-height: 500px;
+    }
+
+    /* Header styling */
+    .main-header {
+      background: #0d6efd !important;
+      color: white !important;
+      padding: 10px 20px;
+    }
+
+    .main-header h1,
+    .main-header span,
+    .main-header div {
+      color: white !important;
+    }
+
+    .main-header i.fa-map-marked-alt {
+      color: #fde047 !important; /* amber-200 */
+    }
+
+    /* Styly pro tlačítka výběru krav */
+    .cattle-select-btn, .person-select-btn {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(56, 189, 248, 0.35);
+      border-radius: 0.5rem;
+      color: #e2e8f0;
+      font-weight: 600;
+      font-size: 0.8rem;
+      padding: 0.5rem;
+      min-height: 36px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .cattle-select-btn:hover, .person-select-btn:hover {
+      background: rgba(56, 189, 248, 0.15);
+      border-color: rgba(56, 189, 248, 0.6);
+      color: #38bdf8;
+      transform: translateY(-1px);
+    }
+
+    .cattle-select-btn.active, .person-select-btn.active {
+      background: rgba(56, 189, 248, 0.4);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.3);
+      font-weight: 700;
+    }
+
+    .cattle-select-btn.selected, .person-select-btn.selected {
+      background: rgba(56, 189, 248, 0.25);
+      border-color: #38bdf8;
+      color: #38bdf8;
+      box-shadow: 0 0 0 2px rgba(56, 189, 248, 0.2);
+    }
+
+    .cattle-select-btn.expand-btn, .person-select-btn.expand-btn {
+      background: rgba(34, 197, 94, 0.15);
+      border-color: rgba(34, 197, 94, 0.35);
+      color: #22c55e;
+    }
+
+    .cattle-select-btn.expand-btn:hover, .person-select-btn.expand-btn:hover {
+      background: rgba(34, 197, 94, 0.25);
+      border-color: #22c55e;
+    }
+
+    /* Area tooltip styling for variable zones */
+    .area-tooltip {
+      background: rgba(15, 23, 42, 0.95) !important;
+      border: 1px solid rgba(34, 197, 94, 0.6) !important;
+      border-radius: 0.5rem !important;
+      color: #22c55e !important;
+      font-weight: 600 !important;
+      font-size: 0.85rem !important;
+      padding: 0.4rem 0.8rem !important;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
+    }
+
+    .area-tooltip:before {
+      border-top-color: rgba(15, 23, 42, 0.95) !important;
+    }
+
+  </style>
+</head>
+<body class="hold-transition sidebar-mini layout-fixed bg-stone-900">
+
+  <!-- Main Header -->
+  <header class="main-header" style="background: #0d6efd; padding: 10px 20px;">
+    <div class="container-fluid">
+      <div class="row align-items-center">
+        <div class="col-md-4">
+          <h1 style="color: white !important; font-size: 1.5rem; margin: 0;">
+            <i class="fas fa-map-marked-alt me-2" style="color: #fde047 !important;"></i>
+            Rumburk Inteligentní pastvina
+          </h1>
+          <div style="color: white !important; font-size: 0.9rem;">Tracking System - Parallel Mode</div>
+        </div>
+        <div class="col-md-4 text-center">
+          <div id="zone-type-indicator" style="color: white !important; font-size: 0.95rem; font-weight: 500;">
+            Aktuální typ zón: Fixní
+          </div>
+        </div>
+        <div class="col-md-4 text-end">
+          <span class="status-indicator status-online"></span>
+          <span style="color: white !important;">System Online</span>
+          <span class="ms-3" style="color: white !important;">
+            <i class="fas fa-clock me-1" style="color: white !important;"></i>
+            <span id="current-time" style="color: white !important;"></span>
+          </span>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content -->
+  <div class="container-fluid" style="padding: 0; margin-top: 0;">
+
+    <!-- Main Layout Row -->
+    <div class="row" style="margin: 0; height: calc(100vh - 60px);">
+
+      <!-- Left Sidebar Column -->
+      <div class="col-lg-2" style="padding: 0; background-color: #075985; height: calc(100vh - 60px); display: flex; flex-direction: column;"> <!-- sky-900 outer -->
+        <div style="padding: 10px; padding-top: 10px; flex: 1; display: flex; flex-direction: column; overflow-y: auto;">
+
+          <!-- Sidebar Controls Inner Container -->
+          <div style="background-color: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 10px;"> <!-- slate-900 inner -->
+            <!-- Tracking Controls -->
+            <div class="parallel-controls" id="tracking-controls">
+              <h5 class="text-white fw-semibold mb-1"><i class="fas fa-route me-2"></i>Tracking Mode</h5>
+              <p class="text-uppercase text-xs mb-3" style="color: rgba(148, 163, 184, 0.9); letter-spacing: 0.22em;">Režim sledování</p>
+
+              <div class="mb-3">
+                <div class="rounded-3 border border-sky-800 bg-slate-900 bg-opacity-75 shadow-lg px-3 py-3">
+                  <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle" style="width: 36px; height: 36px; background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(59, 130, 246, 0.15)); color: #38bdf8;">
+                      <i class="fas fa-satellite-dish"></i>
+                    </span>
+                    <div class="d-flex flex-column">
+                      <span class="text-white fw-semibold" style="font-size: 0.85rem;">Monitoring v reálném čase</span>
+                      <span class="text-slate-400" style="font-size: 0.7rem;">Vyber aktivní režim sledování</span>
+                    </div>
+                  </div>
+                  <select id="tracking-mode-select"
+                          class="w-100 text-white"
+                          style="background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 0.75rem; padding: 0.6rem 0.8rem; font-size: 0.9rem; box-shadow: inset 0 1px 0 rgba(255,255,255,0.05);">
+                    <option value="single" selected>Jedna kráva – single režim</option>
+                    <option value="parallel">Více krav – parallel režim</option>
+                    <option value="parallel-extra">Krávy a auta – parallel režim</option>
+                  </select>
+
+                  <!-- Dynamická tlačítka pro výběr počtu krav v parallel režimu -->
+                  <div id="person-selection-container" class="mt-3" style="display: none;">
+                    <div class="mb-2">
+                      <span class="text-white fw-semibold" style="font-size: 0.8rem;">Počet krav:</span>
+                    </div>
+                    <div id="person-buttons-grid" class="d-grid gap-2" style="grid-template-columns: repeat(5, 1fr); grid-template-rows: repeat(2, 1fr);">
+                      <!-- Tlačítka 1-9 + 10+ se vygenerují JavaScriptem -->
+                    </div>
+                    <div id="extended-person-buttons" class="mt-2 d-grid gap-2" style="grid-template-columns: repeat(5, 1fr); display: none;">
+                      <!-- Rozšířená tlačítka 10+ se vygenerují JavaScriptem -->
+                    </div>
+
+                    <!-- Načíst a Vyčistit tlačítka pro parallel režim -->
+                    <div class="d-flex gap-2 mt-3">
+                      <button id="parallel-person-load-btn" class="btn btn-sm btn-success w-100" disabled>
+                        <i class="fas fa-download me-1"></i>Načíst
+                      </button>
+                      <button id="parallel-person-clear-btn" class="btn btn-sm btn-outline-warning w-100" disabled>
+                        <i class="fas fa-trash me-1"></i>Vyčistit
+                      </button>
+                    </div>
+                  </div>
+              </div>
+            </div>
+
+              <div class="mb-3">
+                <div class="rounded-3 border border-cyan-800 bg-slate-900 bg-opacity-75 shadow-lg px-3 py-3">
+                  <div class="d-flex align-items-center gap-3 mb-3">
+                    <span class="d-inline-flex align-items-center justify-content-center rounded-circle"
+                          style="width: 36px; height: 36px; background: linear-gradient(135deg, rgba(45, 212, 191, 0.3), rgba(15, 118, 110, 0.18)); color: #2dd4bf;">
+                      <i class="fas fa-fingerprint"></i>
+                    </span>
+                    <div class="d-flex flex-column">
+                      <span class="text-white fw-semibold" style="font-size: 0.85rem;">Forenzní analýza pohybu skotu</span>
+                      <span class="text-slate-400" style="font-size: 0.7rem;">Výběr datasetu zimoviště</span>
+                    </div>
+                  </div>
+
+                  <div class="mb-3">
+                    <div class="text-uppercase" style="color: rgba(148, 163, 184, 0.85); font-size: 0.7rem; letter-spacing: 0.22em;">Prosinec 2025</div>
+
+                    <!-- 12. prosince - pouze kráva 1759595 -->
+                    <div class="mt-2 p-2 rounded-3 border border-slate-700 bg-slate-800/60">
+                      <div class="text-white fw-semibold mb-2" style="font-size: 0.82rem;">12. prosince 2025</div>
+                      <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger text-start forensic-dataset-btn" data-dataset="COW_1759595_121225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 1759595 <span class="badge bg-danger ms-1">627</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 13. prosince - pouze kráva 1759595 -->
+                    <div class="mt-2 p-2 rounded-3 border border-slate-700 bg-slate-800/60">
+                      <div class="text-white fw-semibold mb-2" style="font-size: 0.82rem;">13. prosince 2025</div>
+                      <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger text-start forensic-dataset-btn" data-dataset="COW_1759595_131225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 1759595 <span class="badge bg-danger ms-1">1038</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 14. prosince - všechny 3 krávy -->
+                    <div class="mt-2 p-2 rounded-3 border border-slate-700 bg-slate-800/60">
+                      <div class="text-white fw-semibold mb-2" style="font-size: 0.82rem;">14. prosince 2025</div>
+                      <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger text-start forensic-dataset-btn" data-dataset="COW_1759595_141225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 1759595 <span class="badge bg-danger ms-1">1248</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info text-start forensic-dataset-btn" data-dataset="COW_227831_141225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 227831 <span class="badge bg-info ms-1">458</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary text-start forensic-dataset-btn" data-dataset="COW_166691_141225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 166691 <span class="badge bg-primary ms-1">627</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 15. prosince - všechny 3 krávy -->
+                    <div class="mt-3 p-2 rounded-3 border border-slate-700 bg-slate-800/60">
+                      <div class="text-white fw-semibold mb-2" style="font-size: 0.82rem;">15. prosince 2025</div>
+                      <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger text-start forensic-dataset-btn" data-dataset="COW_1759595_151225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 1759595 <span class="badge bg-danger ms-1">907</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info text-start forensic-dataset-btn" data-dataset="COW_227831_151225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 227831 <span class="badge bg-info ms-1">894</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary text-start forensic-dataset-btn" data-dataset="COW_166691_151225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 166691 <span class="badge bg-primary ms-1">779</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    <!-- 16. prosince - všechny 3 krávy -->
+                    <div class="mt-3 p-2 rounded-3 border border-slate-700 bg-slate-800/60">
+                      <div class="text-white fw-semibold mb-2" style="font-size: 0.82rem;">16. prosince 2025</div>
+                      <div class="d-grid gap-2">
+                        <button type="button" class="btn btn-sm btn-outline-danger text-start forensic-dataset-btn" data-dataset="COW_1759595_161225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 1759595 <span class="badge bg-danger ms-1">402</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-info text-start forensic-dataset-btn" data-dataset="COW_227831_161225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 227831 <span class="badge bg-info ms-1">191</span>
+                        </button>
+                        <button type="button" class="btn btn-sm btn-outline-primary text-start forensic-dataset-btn" data-dataset="COW_166691_161225">
+                          <i class="fas fa-cow me-1"></i>Kráva ID 166691 <span class="badge bg-primary ms-1">282</span>
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+<div class="d-flex gap-2 mt-2">
+                <button id="parallel-load-btn" class="btn btn-sm btn-success w-100">
+                  <i class="fas fa-download me-1"></i>Načíst
+                </button>
+                <button id="parallel-clear-btn" class="btn btn-sm btn-outline-warning w-100" disabled>
+                  <i class="fas fa-trash me-1"></i>Vyčistit
+                </button>
+              </div>
+
+              <!-- Toggle Reporting Button -->
+              <div class="mt-3 pt-2" style="border-top: 1px solid rgba(148, 163, 184, 0.2);">
+                <button id="toggle-reporting-btn" class="btn btn-sm btn-outline-primary w-100">
+                  <i class="fas fa-chart-line me-2"></i>Reporting & Analýza
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- GREEN Polygon Controls -->
+          <div style="background-color: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 10px;"> <!-- slate-900 -->
+            <div class="parallel-controls mb-3" id="green-polygon-controls">
+              <h6 style="color: white;"><i class="fas fa-layer-group me-2"></i>Management zón</h6>
+              <div class="mb-2" style="margin-top: 5px;">
+                <select id="green-polygons-mode" class="form-select form-select-sm">
+                  <option value="fixed" selected>Fixní povolené zóny</option>
+                  <option value="variable">Variabilní povolené zóny</option>
+                </select>
+              </div>
+              <div id="variable-zone-controls" class="d-none">
+                <!-- Počet aktivních rohů -->
+                <div style="background-color: #1e293b; padding: 12px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #334155;">
+                  <label class="form-label" style="color: white; margin-bottom: 8px;">Počet aktivních rohů:</label>
+                  <select id="active-corners-count" class="form-select form-select-sm">
+                    <option value="4" selected>4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                  </select>
+                </div>
+
+                <!-- Počet variabilních zón -->
+                <div style="background-color: #1e293b; padding: 12px; border-radius: 6px; margin-bottom: 10px; border: 1px solid #334155;">
+                  <label class="form-label" style="color: white; margin-bottom: 8px;">Počet variabilních zón:</label>
+                  <select id="variable-zones-count" class="form-select form-select-sm">
+                    <option value="1">1</option>
+                    <option value="2" selected>2</option>
+                    <option value="3">3</option>
+                    <option value="4">4</option>
+                    <option value="5">5</option>
+                    <option value="6">6</option>
+                    <option value="7">7</option>
+                    <option value="8">8</option>
+                    <option value="9">9</option>
+                    <option value="10">10</option>
+                  </select>
+                </div>
+
+                <!-- Globální tlačítka (zobrazí se až po dokončení všech zón) -->
+                <div id="global-zone-actions" class="d-none">
+                  <div class="d-grid gap-2 mb-3">
+                    <button id="global-confirm-zones-btn" class="btn btn-success btn-sm">
+                      <i class="fas fa-globe me-2"></i>Globální potvrzení zón
+                    </button>
+                    <button id="global-cancel-zones-btn" class="btn btn-danger btn-sm">
+                      <i class="fas fa-trash me-2"></i>Zrušit všechny zóny
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- REPORTING CONTROLS -->
+          <div id="reporting-section" style="background-color: #0f172a; padding: 15px; border-radius: 8px; margin-bottom: 10px; display: none;"> <!-- slate-900 inner -->
+            <div class="parallel-controls" id="reporting-controls">
+              <h5 class="text-white fw-semibold mb-1"><i class="fas fa-chart-line me-2"></i>Reporting</h5>
+              <p class="text-uppercase text-xs mb-3" style="color: rgba(148, 163, 184, 0.9); letter-spacing: 0.22em;">Analýza návštěv</p>
+
+              <!-- Cattle Selection -->
+              <div class="mb-3">
+                <label class="form-label text-white mb-2" style="font-size: 0.85rem;">Vyberte krávu pro report:</label>
+                <select id="reporting-person-select" class="form-select form-select-sm" style="background-color: #1e293b; border-color: #475569; color: white;">
+                  <option value="">-- Vyberte krávu --</option>
+                </select>
+              </div>
+
+              <!-- Report Type Selection -->
+              <div class="mb-3">
+                <label class="form-label text-white mb-2" style="font-size: 0.85rem;">Typ reportu:</label>
+                <div class="d-grid gap-2">
+                  <button id="report-incidents" class="btn btn-danger btn-sm" disabled>
+                    <i class="fas fa-exclamation-triangle me-2"></i>Incidenty
+                  </button>
+                  <button id="report-interactions" class="btn btn-info btn-sm" disabled>
+                    <i class="fas fa-users me-2"></i>Interakce krav
+                  </button>
+                  <button id="report-movement" class="btn btn-warning btn-sm" disabled>
+                    <i class="fas fa-route me-2"></i>Timeline pohybu
+                  </button>
+                  <button id="report-full" class="btn btn-success btn-sm" disabled>
+                    <i class="fas fa-file-alt me-2"></i>Kompletní report
+                  </button>
+                </div>
+              </div>
+
+              <!-- Export Options -->
+              <div class="mb-3" id="export-options" style="display: none;">
+                <label class="form-label text-white mb-2" style="font-size: 0.85rem;">Export:</label>
+                <div class="d-grid gap-2">
+                  <button id="export-json" class="btn btn-outline-light btn-sm">
+                    <i class="fas fa-code me-2"></i>JSON
+                  </button>
+                  <button id="export-mqtt" class="btn btn-outline-primary btn-sm">
+                    <i class="fas fa-share me-2"></i>Odeslat na NAS
+                  </button>
+                </div>
+              </div>
+
+              <!-- Report Status -->
+              <div id="report-status" class="text-center" style="display: none;">
+                <div class="spinner-border spinner-border-sm text-light me-2" role="status">
+                  <span class="visually-hidden">Loading...</span>
+                </div>
+                <small class="text-light">Generování reportu...</small>
+              </div>
+
+            </div>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Right Column: Widgets + Map -->
+      <div class="col-lg-10" style="padding: 0; height: 100%; display: flex; flex-direction: column;">
+
+        <!-- Top Row: Widgets -->
+        <div class="row" style="margin: 0; height: 200px; padding: 10px; flex-shrink: 0;">
+
+          <!-- Widget 1: Jupiter GIS Analytics -->
+          <div class="col-lg-4 col-md-6 col-12">
+            <div class="small-box text-bg-primary compact-widget">
+              <div class="inner">
+                <h3 id="jupiter-risk-score">--</h3>
+                <p>Jupiter Analytics</p>
+                <div style="font-size: 11px; margin-top: 5px; color: white;">
+                  <div class="mb-1">
+                    <strong style="color: white;">Risk Level:</strong>
+                    <span id="jupiter-risk-level" class="badge badge-sm bg-success">Normal</span>
+                  </div>
+                  <div class="mb-1">
+                    <strong style="color: white;">Patterns:</strong> <span id="jupiter-pattern-count" style="color: white;">0</span>
+                    (<span id="jupiter-pattern-confidence" style="color: white;">0%</span>)
+                  </div>
+                  <div class="mb-1">
+                    <strong style="color: white;">Anomalies:</strong> <span id="jupiter-anomaly-count" style="color: white;">0</span>
+                  </div>
+                  <div class="mb-1">
+                    <strong style="color: white;">Status:</strong>
+                    <span id="jupiter-connection-status" class="text-warning">Connecting...</span>
+                  </div>
+                </div>
+              </div>
+              <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"></path>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Widget 2 removed intentionally -->
+
+          <!-- Widget 3: Sledovan? kr?vy -->
+          <div class="col-lg-4 col-md-6 col-12">
+            <div class="small-box text-bg-warning compact-widget">
+              <div class="inner">
+                <h3 id="sshr-active-persons-count">0</h3>
+                <p>Sledovaní krávy na zimovišti</p>
+                <div style="font-size: 11px; margin-top: 5px; max-height: 120px; overflow-y: auto; font-family: monospace;">
+                  <div id="sshr-active-persons-list" style="color: white;">
+                    <div class="mb-1">Žádné sledované krávy</div>
+                  </div>
+                </div>
+              </div>
+              <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"></path>
+              </svg>
+            </div>
+          </div>
+
+          <!-- Widget 4: Po?et krav -->
+          <div class="col-lg-4 col-md-6 col-12">
+            <div class="small-box text-bg-danger compact-widget">
+              <div class="inner">
+                <h3 id="sshr-person-count">0</h3>
+                <p>Počet krav na zimovišti - AI</p>
+              </div>
+              <svg class="small-box-icon" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"></path>
+              </svg>
+            </div>
+          </div>
+
+        </div>
+        <!-- End Widgets Row --><!-- End Widgets Row -->
+
+        <!-- Map Area - fills remaining space -->
+        <div class="card" style="flex: 1; margin: 10px; min-height: 500px;">
+          <div class="card-body p-0" style="height: 100%; position: relative;">
+            <div id="leafletMap"></div>
+            <div id="parallel-panels" class="parallel-panel-stack hidden"></div>
+
+            <!-- Variable Zones Control Panel (shown only during variable mode) -->
+            <div id="variable-zones-panel" style="position:absolute; bottom:20px; left:20px; z-index:2000; display:none;">
+              <div style="background-color: #1e293b; padding: 15px; border-radius: 8px; border: 1px solid #334155; min-width: 220px;">
+                <h6 style="color: white; margin-bottom: 12px;"><i class="fas fa-draw-polygon me-2"></i>Variabilní zóny</h6>
+
+                <!-- Akční tlačítka -->
+                <div class="d-grid gap-2 mb-3">
+                  <button id="start-drawing-btn" class="btn btn-primary btn-sm">
+                    <i class="fas fa-pencil-alt me-2"></i>Zahájit malování
+                  </button>
+                  <button id="confirm-zone-btn" class="btn btn-success btn-sm" disabled>
+                    <i class="fas fa-check me-2"></i>Potvrdit zonu
+                  </button>
+                  <button id="cancel-zone-btn" class="btn btn-danger btn-sm" disabled>
+                    <i class="fas fa-times me-2"></i>Zrušit zonu
+                  </button>
+                </div>
+
+                <!-- Počítadlo potvrzených zón -->
+                <div style="background-color: rgba(59, 130, 246, 0.1); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 6px; padding: 8px; text-align: center;">
+                  <small style="color: #93c5fd; font-weight: 500;">
+                    Počet potvrzených zón: <span id="confirmed-zones-counter">0</span>/<span id="total-zones-counter">2</span>
+                  </small>
+                </div>
+              </div>
+            </div>
+
+
+            <!-- CEPRO-Style Control Panels -->
+            <div style="position:absolute; bottom:140px; right:20px; z-index:2000; display:flex; flex-direction:column; gap:8px;">
+
+              <!-- Controls Panel (RUN/PAUSE/STOP) -->
+              <div class="bg-black rounded shadow-xl border border-gray-800 overflow-hidden" style="min-width:120px;">
+                <div class="bg-gray-900 px-2 py-1 cursor-pointer hover:bg-gray-800 transition-colors" onclick="toggleSSHRControlPanel('run-panel')">
+                  <div class="flex items-center justify-between">
+                    <span class="text-white font-semibold text-xs">Controls</span>
+                    <svg id="run-panel-icon" class="w-3 h-3 text-white transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </div>
+                </div>
+                <div id="run-panel-content" class="p-1.5" style="display:none;">
+                  <button id="sshr-startBtn" class="w-full bg-blue-700 hover:bg-blue-800 text-white font-semibold py-1.5 px-2 rounded shadow hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-1 mb-1 text-xs">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M8 5v14l11-7z"/>
+                    </svg>
+                    <span>RUN</span>
+                  </button>
+                  <button id="sshr-pauseBtn" class="w-full bg-orange-400 hover:bg-orange-500 text-white font-semibold py-1.5 px-2 rounded shadow hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-1 mb-1 text-xs">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M6 4h4v16H6V4zm8 0h4v16h-4V4z"/>
+                    </svg>
+                    <span>PAUSE</span>
+                  </button>
+                  <button id="sshr-stopBtn" class="w-full bg-red-700 hover:bg-red-800 text-white font-semibold py-1.5 px-2 rounded shadow hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-1 text-xs">
+                    <svg class="w-3 h-3" fill="currentColor" viewBox="0 0 24 24">
+                      <rect x="6" y="6" width="12" height="12"/>
+                    </svg>
+                    <span>STOP</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Speed Panel (FASTER/SLOWER) -->
+              <div class="bg-black rounded shadow-xl border border-gray-800 overflow-hidden" style="min-width:120px;">
+                <div class="bg-gray-900 px-2 py-1 cursor-pointer hover:bg-gray-800 transition-colors" onclick="toggleSSHRControlPanel('speed-panel')">
+                  <div class="flex items-center justify-between">
+                    <span class="text-white font-semibold text-xs">Speed</span>
+                    <span id="sshr-speed-display" class="text-xs text-gray-300">0x</span>
+                    <svg id="speed-panel-icon" class="w-3 h-3 text-white transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </div>
+                </div>
+                <div id="speed-panel-content" class="p-1.5" style="display:none;">
+                  <button id="sshr-fasterBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-1.5 px-2 rounded shadow hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-1 mb-1 text-xs">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+                    </svg>
+                    <span>FASTER</span>
+                  </button>
+                  <button id="sshr-slowerBtn" class="w-full bg-amber-500 hover:bg-amber-600 text-white font-semibold py-1.5 px-2 rounded shadow hover:shadow-lg transition-all duration-300 transform hover:-translate-y-0.5 flex items-center justify-center gap-1 text-xs">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                    <span>SLOWER</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Cattle Legend (Bottom-Left) -->
+            <div id="cattle-legend" class="cattle-legend">
+              <div style="font-weight: 600; margin-bottom: 8px; color: #f8fafc; font-size: 0.9rem;">
+                <i class="fas fa-cow me-1"></i> Krávy
+              </div>
+              <div class="cattle-legend-item">
+                <div class="cattle-legend-color" style="background: #FF6B6B;"></div>
+                <span>ID 1759595 (IMEI155)</span>
+              </div>
+              <div class="cattle-legend-item">
+                <div class="cattle-legend-color" style="background: #4ECDC4;"></div>
+                <span>ID 227831 (IMEI174)</span>
+              </div>
+              <div class="cattle-legend-item">
+                <div class="cattle-legend-color" style="background: #45B7D1;"></div>
+                <span>ID 166691 (IMEI718)</span>
+              </div>
+            </div>
+
+            <!-- Animation Layers Dropdown (Top-Right) -->
+            <div style="position:absolute; top:10px; right:10px; z-index:2000;">
+              <div class="bg-black rounded shadow-xl border border-gray-800 overflow-hidden" style="min-width:180px;">
+                <div class="bg-gray-900 px-2 py-1 cursor-pointer hover:bg-gray-800 transition-colors" onclick="toggleSSHRControlPanel('layers-panel')">
+                  <div class="flex items-center justify-between">
+                    <span class="text-white font-semibold text-xs">Animační vrstvy</span>
+                    <svg id="layers-panel-icon" class="w-3 h-3 text-white transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+                    </svg>
+                  </div>
+                </div>
+                <div id="layers-panel-content" class="p-1.5" style="display:none;">
+                  <div class="space-y-1">
+                    <!-- Anchor Layers (Radio buttons - mutually exclusive) -->
+                    <div class="border-b border-gray-700 pb-1 mb-1">
+                      <div class="text-gray-400 text-xs mb-1 px-1">Kotvy (výběr 1):</div>
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="radio" name="anchor-layer" value="bez-kotev" class="sr-only" checked>
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded-full mr-2 flex items-center justify-center">
+                          <span class="w-1.5 h-1.5 bg-white rounded-full"></span>
+                        </span>
+                        <span class="text-white text-xs">Bez kotev</span>
+                      </label>
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="radio" name="anchor-layer" value="s-kotvami-bez-cisel" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded-full mr-2 flex items-center justify-center">
+                          <span class="w-1.5 h-1.5 bg-white rounded-full hidden"></span>
+                        </span>
+                        <span class="text-white text-xs">S kotvami bez čísel</span>
+                      </label>
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="radio" name="anchor-layer" value="s-id-kotev" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded-full mr-2 flex items-center justify-center">
+                          <span class="w-1.5 h-1.5 bg-white rounded-full hidden"></span>
+                        </span>
+                        <span class="text-white text-xs">S ID kotev</span>
+                      </label>
+                    </div>
+
+                    <!-- Polylines/Polygons/Infra Layers (Checkboxes - can be combined) -->
+                    <div>
+                      <div class="text-gray-400 text-xs mb-1 px-1">Polylines/Polygons/Infra (kombinovatelné):</div>
+
+                      <!-- GREEN Polylines -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="green-polylines" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">GREEN Polylines</span>
+                      </label>
+
+                      <!-- GREEN Polygons -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="green-polygons" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">GREEN Polygons</span>
+                      </label>
+
+                      <!-- RED Polylines -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="red-polylines" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">RED Polylines</span>
+                      </label>
+
+                      <!-- RED Polygons -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="red-polygons" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">RED Polygons</span>
+                      </label>
+
+                      <!-- INFRA Elements -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="infra-elements" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">INFRA Elements</span>
+                      </label>
+
+                      <!-- Trajektorie krav -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="cattle-trajectories" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">Trajektorie krav</span>
+                      </label>
+
+                      <!-- Cattle grouping -->
+                      <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                        <input type="checkbox" name="polygon-layer" value="cattle-grouping" class="sr-only">
+                        <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded mr-2 flex items-center justify-center">
+                          <svg class="w-2 h-2 text-white hidden" fill="currentColor" viewBox="0 0 20 20">
+                            <path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
+                          </svg>
+                        </span>
+                        <span class="text-white text-xs">Shlukování krav</span>
+                      </label>
+                    </div>
+
+                    <!-- Trajectory style -->
+                    <div class="border-t border-gray-700 pt-1 mt-1">
+                      <div class="text-gray-400 text-xs mb-1 px-1 flex items-center justify-between">
+                        <span>Trajektorie krav na farmě</span>
+                        <span class="text-[10px] text-gray-500 italic">výběr stylu</span>
+                      </div>
+                      <div class="flex flex-col gap-0.5 px-1">
+                        <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                          <input type="radio" name="trajectory-style" value="solid" class="sr-only" checked>
+                          <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded-full mr-2 flex items-center justify-center">
+                            <span class="w-1.5 h-1.5 bg-white rounded-full"></span>
+                          </span>
+                          <span class="text-white text-xs">Souvislá čára</span>
+                        </label>
+                        <label class="flex items-center cursor-pointer hover:bg-gray-800 rounded px-1 py-0.5 transition-colors">
+                          <input type="radio" name="trajectory-style" value="dashed" class="sr-only">
+                          <span class="w-3 h-3 bg-gray-700 border border-gray-600 rounded-full mr-2 flex items-center justify-center">
+                            <span class="w-1.5 h-1.5 bg-white rounded-full hidden"></span>
+                          </span>
+                          <span class="text-white text-xs">Přerušovaná čára</span>
+                        </label>
+                      </div>
+                    </div>
+
+                    <div class="border-t border-gray-700 pt-1 mt-1">
+                      <div class="px-1 py-0.5 rounded bg-gray-900 text-[10px] text-gray-400 leading-tight">
+                        Shlukování krav zvýrazní skupiny ≥2 krav, které jsou ≤5&nbsp;m alespoň 30&nbsp;s.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Fullscreen Button -->
+            <button id="sshr-map-fullscreen-btn" style="position:absolute; bottom:20px; right:20px; z-index:2000; width:40px; height:40px; border-radius:8px; border:none; background:rgba(255,255,255,0.95); box-shadow:0 2px 8px rgba(0,0,0,0.2); cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.2s ease;" title="Celá obrazovka">
+              <svg style="width:18px; height:18px; color:#333;" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+      </div>
+      <!-- End Right Column -->
+
+    </div>
+    <!-- End Main Layout Row -->
+  </div>
+  <!-- End Container -->
+
+  <!-- Footer -->
+  <footer class="footer-info">
+    <div class="container-fluid">
+      Rumburk Inteligentní pastvina Tracking System v2.0.0 |
+      Phase 2: Enhanced Architecture |
+      <span id="system-status">System Ready</span>
+    </div>
+  </footer>
+
+  <!-- JavaScript Dependencies -->
+
+  <!-- jQuery -->
+  <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+  <!-- jQuery UI for draggable functionality -->
+  <script src="https://code.jquery.com/ui/1.13.2/jquery-ui.min.js"></script>
+  <link rel="stylesheet" href="https://code.jquery.com/ui/1.13.2/themes/ui-lightness/jquery-ui.css">
+
+  <!-- Bootstrap JS -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.7/dist/js/bootstrap.bundle.min.js"></script>
+
+  <!-- AdminLTE v4 JS -->
+  <script src="https://cdn.jsdelivr.net/npm/admin-lte@4.0.0-beta2/dist/js/adminlte.min.js"></script>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <!-- Leaflet.draw JS for polygon drawing tools -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet.draw/1.0.4/leaflet.draw.js"></script>
+
+  <!-- Rumburk Configuration & Zones -->
+  <script src="CONFIG_RUMBURK.js"></script>
+  <script src="ZONES_RUMBURK.js"></script>
+
+  <!-- Cattle Datasets Registry -->
+  <script src="Rumburk_DATASETS.js"></script>
+
+  <!-- Individual Cow Dataset Files -->
+  <!-- Cow 1759595 (IMEI155) -->
+  <script src="ID1759595_121225.js"></script>
+  <script src="ID1759595_131225.js"></script>
+  <script src="ID1759595_141225.js"></script>
+  <script src="ID1759595_151225.js"></script>
+  <script src="ID1759595_161225.js"></script>
+  <!-- Cow 227831 (IMEI174) -->
+  <script src="ID227831_141225.js"></script>
+  <script src="ID227831_151225.js"></script>
+  <script src="ID227831_161225.js"></script>
+  <!-- Cow 166691 (IMEI718) -->
+  <script src="ID166691_141225.js"></script>
+  <script src="ID166691_151225.js"></script>
+  <script src="ID166691_161225.js"></script>
+
+  <!-- Shared SSHR Modules -->
+  <script src="../SSHR_Bohuslavice/incident-registry.js"></script>
+  <script src="../SSHR_Bohuslavice/group-interaction-tracker.js"></script>
+  <script src="../SSHR_Bohuslavice/mqtt-client.js"></script>
+  <script src="../SSHR_Bohuslavice/reporting-ui.js"></script>
+  <script src="../SSHR_Bohuslavice/parallel-tracking.js"></script>
+  <script src="../SSHR_Bohuslavice/sshr-visit-service.js"></script>
+  <script src="../SSHR_Bohuslavice/incident-system.js"></script>
+  <script src="../SSHR_Bohuslavice/polygon-manager.js"></script>
+  <script src="../SSHR_Bohuslavice/incident-engine.js"></script>
+  <script src="../SSHR_Bohuslavice/parallel-engine.js"></script>
+
+  <!-- Main Rumburk Renderer -->
+  <script src="Rumburk_renderer.js"></script>
+
+  <!-- SSHR UI Scripts -->
+  <!-- SSHR Modules -->
+  <script src="incident-registry.js"></script>
+  <script src="group-interaction-tracker.js"></script>
+  <script src="mqtt-client.js"></script>
+  <script src="reporting-ui.js"></script>
+  <script src="parallel-tracking.js"></script>
+  <script src="sshr-visit-service.js"></script>
+  <script src="incident-system.js"></script>
+  <script src="polygon-manager.js"></script>
+  <script src="incident-engine.js"></script>
+  <script src="parallel-engine.js"></script>
+
+  <!-- Main SSHR Renderer -->
+  <script src="renderer_SSHR_Bohuslavice.js"></script>
+
+  <!-- SSHR UI Scripts -->
+  <script>
+    // Clock Update
+    function updateClock() {
+      const now = new Date();
+      const timeString = now.toLocaleTimeString('cs-CZ');
+      document.getElementById('current-time').textContent = timeString;
+    }
+
+    // Initialize clock
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    const RUMBURK_DATASETS = window.RUMBURK_DATASETS || {};
+    const RUMBURK_DATASET_ORDER = Object.keys(RUMBURK_DATASETS);
+    const availablePersonDatasets = [];
+    const availableVehicleDatasets = [];
+    const registeredPersonDatasets = new Set();
+    const registeredVehicleDatasets = new Set();
+    const TRACKING_MODE_LABELS = {
+      single: 'Single Mode',
+      parallel: 'Parallel Mode',
+      'parallel-extra': 'Parallel EXTRA'
+    };
+    let currentTrackingMode = 'parallel';
+
+    const selectedPersonDatasets = new Set();
+    window.sshrSelectedPersonDatasets = selectedPersonDatasets;
+
+    function isDatasetAvailable(datasetId) {
+      return availablePersonDatasets.some(ds => ds.id === datasetId);
+    }
+
+    function registerPersonDatasets(engine) {
+      availablePersonDatasets.length = 0;
+      Object.entries(RUMBURK_DATASETS).forEach(([datasetId, data]) => {
+        if (Array.isArray(data) && data.length) {
+          availablePersonDatasets.push({ id: datasetId });
+          if (engine && !registeredPersonDatasets.has(datasetId)) {
+            engine.registerDataset(datasetId, data);
+            registeredPersonDatasets.add(datasetId);
+          }
+        }
+      });
+    }
+
+    function registerVehicleDatasets(engine) {
+      availableVehicleDatasets.length = 0;
+      registeredVehicleDatasets.clear();
+    }
+
+    function applyTrackingModeDisplay(mode) {
+      const panelStack = document.getElementById('parallel-panels');
+      const subtitle = document.querySelector('.main-header .subtitle');
+
+      currentTrackingMode = mode;
+
+      if (panelStack) {
+        if (mode === 'single') {
+          panelStack.classList.add('hidden');
+        } else {
+          panelStack.classList.remove('hidden');
+        }
+      }
+
+      if (subtitle && TRACKING_MODE_LABELS[mode]) {
+        subtitle.textContent = `Tracking System - ${TRACKING_MODE_LABELS[mode]}`;
+      }
+    }
+
+    function initForensicButtons() {
+      const buttons = document.querySelectorAll('.forensic-dataset-btn');
+      buttons.forEach((btn) => {
+        btn.addEventListener('click', () => {
+          const datasetId = btn.dataset.dataset;
+          if (!datasetId) return;
+
+          if (selectedPersonDatasets.has(datasetId)) {
+            selectedPersonDatasets.delete(datasetId);
+            btn.classList.remove('active');
+          } else {
+            selectedPersonDatasets.add(datasetId);
+            btn.classList.add('active');
+          }
+
+          registerPersonDatasets(window.SSHRParallel);
+        });
+      });
+    }
+
+    function refreshCurrentForensicPanel() {
+      // Buttons handle their own state; nothing to refresh here.
+    }
+
+    function getSelectedParallelDatasets() {
+      return Array.from(selectedPersonDatasets);
+    }
+
+    // Initialize UI when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      console.log('🎨 [SSHR-UI] Initializing enhanced SSHR UI...');
+
+      initForensicButtons();
+
+      // Wait for all modules to load
+      setTimeout(() => {
+        // Initialize the main SSHR system
+        if (window.SSHR_CONFIG && window.SSHR) {
+          console.log('🚀 [SSHR-UI] Initializing SSHR system with new modules...');
+
+          // Initialize incident manager if available
+          if (window.IncidentManager) {
+            window.SSHR.incidentManager = new IncidentManager('#incidents-container');
+            console.log('✅ [SSHR-UI] IncidentManager initialized');
+
+            // Test incident (for demonstration)
+            setTimeout(() => {
+              window.SSHR.incidentManager.handleIncident({
+                type: 'system-event',
+                message: 'SSHR Bohuslavice system started successfully',
+                priority: 'low'
+              });
+            }, 2000);
+          }
+
+          // Initialize incident engine bridge
+          if (window.SSHRIncidentEngine) {
+            const polygonManagerInstance = window.SSHR?.polygonManager || window.sshrPolygonManager || null;
+            window.SSHRIncidentEngine.initialise({
+              polygonManager: polygonManagerInstance,
+              incidentManager: window.SSHR?.incidentManager || null
+            });
+            console.log('✅ [SSHR-UI] IncidentEngine initialised');
+          }
+
+          // Initialize parallel engine and controls
+          console.log(`🔍 [RUMBURK] Parallel engine check: SSHRParallel=${!!window.SSHRParallel}`);
+          if (window.SSHRParallel) {
+            const parallelAdapter = createParallelUIAdapter();
+
+            window.SSHRParallel.initialise({
+              map: window.leafletMap,
+              incidentEngine: window.SSHRIncidentEngine || null,
+              uiAdapter: parallelAdapter,
+              tickInterval: window.SSHR_CONFIG?.timings?.updateInterval || 1000
+            });
+
+            if (Array.isArray(window.realData_SSHR_DATA1)) {
+              window.SSHRParallel.registerDataset('SSHR_DATA1', window.realData_SSHR_DATA1);
+            }
+            if (Array.isArray(window.realData_SSHR_DATA2)) {
+              window.SSHRParallel.registerDataset('SSHR_DATA2', window.realData_SSHR_DATA2);
+            }
+
+            setupParallelControls(window.SSHRParallel);
+          }
+
+          // Setup polygon mode controls
+          setupPolygonModeControls();
+
+          // Update UI counters
+          updatePersonCount();
+          updateSystemStatus('All systems operational');
+        }
+
+        console.log('✅ [SSHR-UI] Enhanced SSHR UI initialization complete');
+      }, 1500);
+    });
+
+    // Update cattle count
+    function updatePersonCount() {
+      // Count active cattle from parallel engine
+      const count = window.SSHRParallel?.tracks?.size || 0;
+      const element = document.getElementById('sshr-person-count');
+      if (element) {
+        element.textContent = count;
+      }
+    }
+
+    // Update system status
+    function updateSystemStatus(status) {
+      const statusElement = document.getElementById('system-status');
+      if (statusElement) {
+        statusElement.textContent = status;
+      }
+    }
+
+    // Setup polygon mode controls
+    function setupPolygonModeControls() {
+      console.log('🔺 [SSHR-UI] Setting up polygon mode controls...');
+
+      // Polygon mode toggle
+      const polygonModeToggle = document.getElementById('polygonModeToggle');
+      if (polygonModeToggle) {
+        // Disable FLOAT mode toggle - Management zones functionality removed
+        polygonModeToggle.disabled = true;
+        polygonModeToggle.checked = false;
+        console.log('🚫 [SSHR-UI] FLOAT mode disabled - Management zones functionality removed');
+      }
+
+      // Import zones file input
+      const importInput = document.getElementById('import-zones-input');
+      if (importInput) {
+        importInput.addEventListener('change', function(e) {
+          const file = e.target.files[0];
+          if (file) {
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+              try {
+                const data = JSON.parse(evt.target.result);
+                if (window.SSHR && window.SSHR.zones && window.SSHR.zones.importZones) {
+                  const success = window.SSHR.zones.importZones(data);
+                  if (success) {
+                    alert('Zóny byly úspěšně importovány!');
+                  } else {
+                    alert('Chyba při importu zón. Zkontrolujte formát souboru.');
+                  }
+                }
+              } catch (error) {
+                alert('Chyba při čtení souboru: ' + error.message);
+              }
+            };
+            reader.readAsText(file);
+          }
+        });
+      }
+
+      console.log('✅ [SSHR-UI] Polygon mode controls initialized');
+    }
+
+    function registerPersonDatasets(engine) {
+      availablePersonDatasets.length = 0;
+      for (let i = 1; i <= MAX_DATASET_COUNT; i++) {
+        const key = `realData_SSHR_DATA${i}`;
+        const datasetName = `SSHR_DATA${i}`;
+        const data = window[key];
+        if (Array.isArray(data) && data.length) {
+          availablePersonDatasets.push({ id: datasetName, index: i });
+          if (engine && !registeredPersonDatasets.has(datasetName)) {
+            engine.registerDataset(datasetName, data);
+            registeredPersonDatasets.add(datasetName);
+          }
+        }
+      }
+
+      selectedPersonDatasets.forEach(datasetId => {
+        if (!isDatasetAvailable(datasetId)) {
+          selectedPersonDatasets.delete(datasetId);
+        }
+      });
+
+      refreshCurrentForensicPanel();
+    }
+
+    function registerVehicleDatasets(engine) {
+      availableVehicleDatasets.length = 0;
+      for (let i = 1; i <= MAX_DATASET_COUNT; i++) {
+        const key = `realData_SSHR_VEHICLE${i}`;
+        const datasetName = `SSHR_VEHICLE${i}`;
+        const data = window[key];
+        if (Array.isArray(data) && data.length) {
+          availableVehicleDatasets.push({ id: datasetName, index: i });
+          if (engine && !registeredVehicleDatasets.has(datasetName)) {
+            engine.registerDataset(datasetName, data);
+            registeredVehicleDatasets.add(datasetName);
+          }
+        }
+      }
+    }
+
+    function applyTrackingModeDisplay(mode) {
+      const panelStack = document.getElementById('parallel-panels');
+      const subtitle = document.querySelector('.main-header .subtitle');
+
+      currentTrackingMode = mode;
+
+      if (panelStack) {
+        if (mode === 'single') {
+          panelStack.classList.add('hidden');
+        } else {
+          panelStack.classList.remove('hidden');
+        }
+      }
+
+      if (subtitle && TRACKING_MODE_LABELS[mode]) {
+        subtitle.textContent = `Tracking System - ${TRACKING_MODE_LABELS[mode]}`;
+      }
+    }
+
+    function setupTrackingModeControls(engine) {
+      const modeSelect = document.getElementById('tracking-mode-select');
+      if (!modeSelect) return;
+
+      modeSelect.addEventListener('change', () => {
+        const selectedMode = modeSelect.value;
+        if (engine && engine.isActive()) {
+          engine.stopSession({ reason: 'mode-change' });
+        }
+        applyTrackingModeDisplay(selectedMode);
+      });
+
+      applyTrackingModeDisplay(modeSelect.value);
+    }
+
+    function setupGreenPolygonControls() {
+      const modeSelect = document.getElementById('green-polygons-mode');
+      const variableControls = document.getElementById('variable-zone-controls');
+      const floatToggle = document.getElementById('floatModeToggle');
+      const zoneCountControls = document.getElementById('zone-count-controls');
+      const shapeSelectorContainer = document.getElementById('shape-selector-container');
+      const countSelect = document.getElementById('variable-zone-count');
+      const confirmBtn = document.getElementById('zone-confirm-btn');
+      const modifyBtn = document.getElementById('zone-modify-btn');
+      const cancelBtn = document.getElementById('zone-cancel-btn');
+      const layoutSummary = document.getElementById('active-layout-summary');
+      const layoutSummaryMeta = layoutSummary ? layoutSummary.querySelector('.layout-meta') : null;
+
+
+      if (!modeSelect) return;
+
+      const getPolygonManager = () => window.SSHR?.polygonManager || window.sshrPolygonManager || null;
+      let currentZoneType = 'fixed';
+      let zonesDrawn = 0;
+      let maxZones = 4;
+
+      const getZoneMap = () => {
+        const pm = getPolygonManager();
+        if (!pm || typeof pm.getZones !== 'function') {
+          return new Map();
+        }
+        const zones = pm.getZones('green') || [];
+        return new Map(zones.map(zone => [zone.id, zone]));
+      };
+
+      const formatZoneLabel = (zone, status) => {
+        const name = zone?.name || zone?.id || 'Neznámá zóna';
+        return status ? `${name} (${status})` : name;
+      };
+
+
+      const updateLayoutSummary = (layout) => {
+        if (!layoutSummary) return;
+        if (!layout) {
+          layoutSummary.style.display = 'none';
+          if (layoutSummaryMeta) {
+            layoutSummaryMeta.textContent = '—';
+          }
+          return;
+        }
+
+        layoutSummary.style.display = 'block';
+        if (layoutSummaryMeta) {
+          const confirmedAt = layout.confirmedAt ? new Date(layout.confirmedAt).toLocaleString('cs-CZ') : '—';
+          const count = Array.isArray(layout.greens) ? layout.greens.length : 0;
+          layoutSummaryMeta.textContent = `ID ${layout.id || '—'} • ${count} zón • ${confirmedAt}`;
+        }
+      };
+
+      const initialLayout = getPolygonManager()?.getActiveLayout?.() || window.SSHR?.activeLayout || null;
+      if (initialLayout) {
+        window.SSHR = window.SSHR || {};
+        window.SSHR.activeLayout = initialLayout;
+      }
+      updateLayoutSummary(initialLayout);
+
+      // Helper function to calculate polygon area using shoelace formula
+      const calculatePolygonArea = (coordinates) => {
+        if (!coordinates || coordinates.length < 3) return 0;
+
+        let area = 0;
+        const n = coordinates.length;
+
+        for (let i = 0; i < n; i++) {
+          const j = (i + 1) % n;
+          const xi = coordinates[i][0] || coordinates[i].lng || coordinates[i].x;
+          const yi = coordinates[i][1] || coordinates[i].lat || coordinates[i].y;
+          const xj = coordinates[j][0] || coordinates[j].lng || coordinates[j].x;
+          const yj = coordinates[j][1] || coordinates[j].lat || coordinates[j].y;
+
+          area += xi * yj;
+          area -= xj * yi;
+        }
+
+        return Math.abs(area) / 2;
+      };
+
+      // Update header zone type indicator
+      const updateHeaderZoneType = (type) => {
+        const indicator = document.getElementById('zone-type-indicator');
+        if (!indicator) return;
+
+        if (type === 'fixed') {
+          indicator.textContent = 'Aktuální typ zón: Fixní';
+        } else {
+          indicator.textContent = 'Aktuální typ zón: Variabilní';
+        }
+      };
+
+      const exitToFixed = (resetZones = true) => {
+        variableControls?.classList.add('d-none');
+        zoneCountControls?.classList.add('d-none');
+        shapeSelectorContainer?.classList.add('d-none');
+        if (floatToggle) floatToggle.checked = false;
+        currentZoneType = 'fixed';
+        zonesDrawn = 0;
+
+
+        const pm = getPolygonManager();
+        if (pm) {
+          pm.disableDrawing?.();
+          pm.removeAllCornerHandles?.();
+          if (resetZones) {
+            pm.clearAllZones();
+            pm.loadFixedZones();
+          }
+          pm.setManagementLimit?.(null);
+          pm.pendingZones?.clear();
+          pm.confirmedZones?.clear();
+          pm.managementActive = false;
+        }
+        if (resetZones) {
+          window.SSHR_ZONES_API?.resetToDefault();
+        }
+
+        window.SSHR?.zones?.switchMode?.('FIXED');
+
+        const indicator = document.getElementById('polygon-mode-indicator');
+        if (indicator) {
+          indicator.textContent = 'FIXED';
+          indicator.className = 'badge bg-secondary';
+        }
+        const info = document.querySelector('#variable-zone-controls .mode-info');
+        if (info) {
+          info.textContent = 'Fixní povolené zóny';
+          info.style.color = '';
+        }
+
+        if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.style.backgroundColor = '#1e293b';
+          confirmBtn.style.borderColor = '#1e293b';
+        }
+
+        window.SSHR = window.SSHR || {};
+        window.SSHR.activeLayout = null;
+        if (window.SSHRIncidentEngine?.setLayoutContext) {
+          window.SSHRIncidentEngine.setLayoutContext(null);
+        }
+        window.dispatchEvent(new CustomEvent('sshr-layout-activated', { detail: { layout: null } }));
+        updateLayoutSummary(null);
+        updateHeaderZoneType('fixed');
+
+        // Hide variable zones panel
+        const variablePanel = document.getElementById('variable-zones-panel');
+        if (variablePanel) {
+          variablePanel.style.display = 'none';
+        }
+
+        // Clear all variable zones from map and reset to default FENCE-only state
+        if (window.SSHR_VARIABLE_STATE?.zones) {
+          console.log('🗑️ [VARIABLE-ZONES] Clearing all variable zones from map...');
+          window.SSHR_VARIABLE_STATE.zones.forEach(zone => {
+            if (zone.polygon && window.leafletMap) {
+              window.leafletMap.removeLayer(zone.polygon);
+            }
+          });
+        }
+
+        // Clear any current zone being drawn
+        if (window.SSHR_VARIABLE_STATE?.currentZone) {
+          const currentZone = window.SSHR_VARIABLE_STATE.currentZone;
+          if (currentZone.polygon && window.leafletMap) {
+            window.leafletMap.removeLayer(currentZone.polygon);
+          }
+          // Remove corner markers
+          if (currentZone.markers) {
+            currentZone.markers.forEach(marker => {
+              if (marker.element && marker.element.parentNode) {
+                marker.element.parentNode.removeChild(marker.element);
+              }
+            });
+          }
+          // Clean up map event listeners
+          if (currentZone.cleanupMapEvents) {
+            currentZone.cleanupMapEvents();
+          }
+        }
+
+        // Clear variable state
+        window.SSHR_VARIABLE_STATE = null;
+
+        // Ensure map shows only FENCE (default state)
+        if (window.leafletMap && window.SSHR_ZONES_API) {
+          console.log('🔄 [MAP-RESET] Resetting map to default FENCE-only state...');
+
+          // Clear all layers except base map and FENCE
+          window.leafletMap.eachLayer(function(layer) {
+            // Keep base tile layer and FENCE
+            if (layer._url || (layer.options && layer.options.isFence)) {
+              return; // Keep this layer
+            }
+            // Remove variable zone layers
+            if (layer instanceof L.Polygon || layer instanceof L.Circle || layer instanceof L.Marker) {
+              // Check if it's not the FENCE by checking color or custom properties
+              if (!layer.options.isFence && layer.options.color !== '#ff0000') {
+                window.leafletMap.removeLayer(layer);
+              }
+            }
+          });
+
+          // Ensure FENCE is visible
+          const fenceData = window.SSHR_ZONES_API.getFence();
+          if (fenceData && fenceData.coordinates) {
+            const existingFence = window.leafletMap._layers && Object.values(window.leafletMap._layers).find(layer => layer.options && layer.options.isFence);
+            if (!existingFence) {
+              // Re-add FENCE if it was accidentally removed
+              const fence = L.polygon(fenceData.coordinates, {
+                color: '#ff0000',
+                fillColor: '#ff0000',
+                fillOpacity: 0.1,
+                weight: 2,
+                isFence: true
+              }).addTo(window.leafletMap);
+              console.log('✅ [MAP-RESET] FENCE polygon restored to map');
+            }
+          }
+        }
+      };
+
+      const enterVariableMode = () => {
+        console.log('🎯 [VARIABLE-MODE] Entering new Variable mode workflow');
+
+        // Show variable zone controls in sidebar
+        variableControls?.classList.remove('d-none');
+
+        // Show variable zones panel on map
+        const variablePanel = document.getElementById('variable-zones-panel');
+        if (variablePanel) {
+          variablePanel.style.display = 'block';
+        }
+
+        // Initialize state
+        window.SSHR_VARIABLE_STATE = {
+          cornersCount: 4,
+          totalZones: 2,
+          confirmedZones: 0,
+          currentZone: null,
+          zones: []
+        };
+
+        // Update counters
+        updateZoneCounters();
+        updateGlobalButtons();
+
+        console.log('✅ [VARIABLE-MODE] Variable mode interface initialized');
+      };
+
+      // Helper functions for variable zones
+      const updateZoneCounters = () => {
+        if (!window.SSHR_VARIABLE_STATE) return;
+
+        const confirmedCounter = document.getElementById('confirmed-zones-counter');
+        const totalCounter = document.getElementById('total-zones-counter');
+
+        if (confirmedCounter) {
+          confirmedCounter.textContent = window.SSHR_VARIABLE_STATE.confirmedZones;
+        }
+        if (totalCounter) {
+          totalCounter.textContent = window.SSHR_VARIABLE_STATE.totalZones;
+        }
+      };
+
+      const updateGlobalButtons = () => {
+        if (!window.SSHR_VARIABLE_STATE) return;
+
+        const globalActions = document.getElementById('global-zone-actions');
+        const isComplete = window.SSHR_VARIABLE_STATE.confirmedZones === window.SSHR_VARIABLE_STATE.totalZones;
+
+        if (globalActions) {
+          if (isComplete) {
+            globalActions.classList.remove('d-none');
+          } else {
+            globalActions.classList.add('d-none');
+          }
+        }
+      };
+
+      // Variable zones drawing functions
+      const createPolygonTemplate = (centerLat, centerLng, corners) => {
+        const radius = 0.001; // Default radius for template
+        const coordinates = [];
+
+        for (let i = 0; i < corners; i++) {
+          const angle = (i / corners) * 2 * Math.PI;
+          const lat = centerLat + radius * Math.cos(angle);
+          const lng = centerLng + radius * Math.sin(angle);
+          coordinates.push([lat, lng]);
+        }
+
+        // Close the polygon
+        coordinates.push(coordinates[0]);
+        return coordinates;
+      };
+
+      const startZoneDrawing = () => {
+        if (!window.SSHR_VARIABLE_STATE || !window.leafletMap) return;
+
+        console.log('🎨 [VARIABLE-ZONES] Starting zone drawing...');
+
+        // Create instruction for user
+        const instruction = L.popup()
+          .setLatLng(window.leafletMap.getCenter())
+          .setContent('<div style="text-align: center; color: #1e293b;"><strong>Klikněte na mapu</strong><br>pro umístění nové zóny</div>')
+          .openOn(window.leafletMap);
+
+        // Set up click handler for map
+        const onMapClick = (e) => {
+          window.leafletMap.off('click', onMapClick);
+          window.leafletMap.closePopup(instruction);
+
+          createEditableZone(e.latlng.lat, e.latlng.lng);
+        };
+
+        window.leafletMap.on('click', onMapClick);
+
+        // Store the click handler so we can remove it if needed
+        window.SSHR_VARIABLE_STATE.mapClickHandler = onMapClick;
+      };
+
+      // Custom draggable implementation for corner markers
+      const makeCornerDraggable = (element, initialCoord, polygon, cornerMarkers, cornerIndex) => {
+        let isDragging = false;
+        let startX, startY;
+
+        const startDrag = (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+
+          isDragging = true;
+          const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+          const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+          startX = clientX;
+          startY = clientY;
+
+          // Change visual feedback
+          element.style.backgroundColor = '#1d4ed8';
+          element.style.transform = 'scale(1.2)';
+          element.style.transition = 'transform 0.1s';
+
+          document.addEventListener('mousemove', onDrag);
+          document.addEventListener('mouseup', stopDrag);
+          document.addEventListener('touchmove', onDrag);
+          document.addEventListener('touchend', stopDrag);
+        };
+
+        const onDrag = (e) => {
+          if (!isDragging) return;
+          e.preventDefault();
+
+          const clientX = e.type.includes('touch') ? e.touches[0].clientX : e.clientX;
+          const clientY = e.type.includes('touch') ? e.touches[0].clientY : e.clientY;
+
+          // Calculate new position
+          const rect = window.leafletMap.getContainer().getBoundingClientRect();
+          const newX = clientX - rect.left;
+          const newY = clientY - rect.top;
+
+          // Update visual position
+          element.style.left = (newX - 7) + 'px';
+          element.style.top = (newY - 7) + 'px';
+
+          // Convert pixel position back to lat/lng
+          const newLatLng = window.leafletMap.containerPointToLatLng([newX, newY]);
+
+          // Update corner data
+          if (cornerMarkers[cornerIndex]) {
+            cornerMarkers[cornerIndex].lat = newLatLng.lat;
+            cornerMarkers[cornerIndex].lng = newLatLng.lng;
+          }
+
+          // Update polygon
+          updatePolygonFromCorners(polygon, cornerMarkers);
+        };
+
+        const stopDrag = (e) => {
+          if (!isDragging) return;
+
+          isDragging = false;
+
+          // Reset visual feedback
+          element.style.backgroundColor = '#3b82f6';
+          element.style.transform = 'scale(1)';
+
+          document.removeEventListener('mousemove', onDrag);
+          document.removeEventListener('mouseup', stopDrag);
+          document.removeEventListener('touchmove', onDrag);
+          document.removeEventListener('touchend', stopDrag);
+        };
+
+        // Add event listeners
+        element.addEventListener('mousedown', startDrag);
+        element.addEventListener('touchstart', startDrag);
+      };
+
+      const createEditableZone = (centerLat, centerLng) => {
+        if (!window.SSHR_VARIABLE_STATE || !window.leafletMap) return;
+
+        const corners = window.SSHR_VARIABLE_STATE.cornersCount;
+        const coordinates = createPolygonTemplate(centerLat, centerLng, corners);
+
+        // Create polygon
+        const polygon = L.polygon(coordinates, {
+          color: '#22c55e',
+          fillColor: '#22c55e',
+          fillOpacity: 0.3,
+          weight: 2
+        }).addTo(window.leafletMap);
+
+        // Add area calculation and hover tooltip
+        const addAreaTooltip = (polygon) => {
+          const calculatePolygonArea = (latlngs) => {
+            // Správný výpočet plochy polygonu v metrech čtverečních
+            const latLngs = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+
+            if (latLngs.length < 3) return 0;
+
+            // Převod stupňů na radiány
+            const toRadians = (deg) => deg * Math.PI / 180;
+
+            let area = 0;
+            const earthRadius = 6371000; // Earth radius in meters
+
+            for (let i = 0; i < latLngs.length; i++) {
+              const j = (i + 1) % latLngs.length;
+
+              const lat1 = toRadians(latLngs[i].lat);
+              const lat2 = toRadians(latLngs[j].lat);
+              const lng1 = toRadians(latLngs[i].lng);
+              const lng2 = toRadians(latLngs[j].lng);
+
+              // Shoelace formula pro sféru
+              area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+            }
+
+            area = Math.abs(area * earthRadius * earthRadius / 2);
+            return area;
+          };
+
+          polygon.on('mouseover', function(e) {
+            const area = calculatePolygonArea(polygon.getLatLngs());
+            // Vždy zobrazovat v m² jak požadováno
+            const areaText = `${Math.round(area)} m²`;
+
+            polygon.bindTooltip(`Plocha: ${areaText}`, {
+              permanent: false,
+              direction: 'center',
+              className: 'area-tooltip'
+            }).openTooltip();
+          });
+
+          polygon.on('mouseout', function(e) {
+            polygon.closeTooltip();
+          });
+        };
+
+        addAreaTooltip(polygon);
+
+        // Create draggable corner markers using custom DOM elements
+        const cornerMarkers = [];
+        coordinates.slice(0, -1).forEach((coord, index) => {
+          // Create DOM element for corner marker
+          const cornerElement = document.createElement('div');
+          cornerElement.className = 'variable-zone-corner';
+          cornerElement.style.cssText = `
+            position: absolute;
+            width: 14px;
+            height: 14px;
+            background-color: #3b82f6;
+            border: 2px solid white;
+            border-radius: 50%;
+            cursor: move;
+            z-index: 1000;
+            user-select: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+          `;
+
+          // Convert lat/lng to pixel position
+          const point = window.leafletMap.latLngToContainerPoint([coord[0], coord[1]]);
+          cornerElement.style.left = (point.x - 7) + 'px';
+          cornerElement.style.top = (point.y - 7) + 'px';
+
+          // Add to map container
+          const mapContainer = window.leafletMap.getContainer();
+          mapContainer.appendChild(cornerElement);
+
+          // Make it draggable using custom implementation
+          makeCornerDraggable(cornerElement, coord, polygon, cornerMarkers, index);
+
+          cornerMarkers.push({
+            element: cornerElement,
+            lat: coord[0],
+            lng: coord[1],
+            index: index
+          });
+        });
+
+        // Store current zone data
+        window.SSHR_VARIABLE_STATE.currentZone = {
+          polygon: polygon,
+          markers: cornerMarkers,
+          id: `zone_${Date.now()}`
+        };
+
+        // Add map event listeners to update corner positions on zoom/pan
+        const updateCornerPositions = () => {
+          cornerMarkers.forEach(marker => {
+            const point = window.leafletMap.latLngToContainerPoint([marker.lat, marker.lng]);
+            marker.element.style.left = (point.x - 7) + 'px';
+            marker.element.style.top = (point.y - 7) + 'px';
+          });
+        };
+
+        window.leafletMap.on('zoom', updateCornerPositions);
+        window.leafletMap.on('move', updateCornerPositions);
+
+        // Store cleanup function
+        window.SSHR_VARIABLE_STATE.currentZone.cleanupMapEvents = () => {
+          window.leafletMap.off('zoom', updateCornerPositions);
+          window.leafletMap.off('move', updateCornerPositions);
+        };
+
+        console.log(`✅ [VARIABLE-ZONES] Editable zone created with ${corners} corners`);
+      };
+
+      const updatePolygonFromCorners = (polygon, corners) => {
+        const coordinates = corners.map(corner => [corner.lat, corner.lng]);
+
+        // Close the polygon
+        coordinates.push(coordinates[0]);
+
+        polygon.setLatLngs(coordinates);
+
+        // Update tooltip area calculation after polygon change
+        if (polygon._tooltip) {
+          polygon.closeTooltip();
+        }
+      };
+
+      const confirmCurrentZone = () => {
+        if (!window.SSHR_VARIABLE_STATE?.currentZone) return;
+
+        const zone = window.SSHR_VARIABLE_STATE.currentZone;
+
+        // Remove corner markers (zone is now confirmed)
+        zone.markers.forEach(marker => {
+          if (marker.element && marker.element.parentNode) {
+            marker.element.parentNode.removeChild(marker.element);
+          }
+        });
+
+        // Clean up map event listeners
+        if (zone.cleanupMapEvents) {
+          zone.cleanupMapEvents();
+        }
+
+        // Change polygon style to confirmed
+        zone.polygon.setStyle({
+          color: '#16a34a',
+          fillColor: '#16a34a',
+          fillOpacity: 0.2,
+          weight: 2
+        });
+
+        // Ensure area tooltip stays available for confirmed zones
+        const addAreaTooltip = (polygon) => {
+          const calculatePolygonArea = (latlngs) => {
+            // Správný výpočet plochy polygonu v metrech čtverečních
+            const latLngs = Array.isArray(latlngs[0]) ? latlngs[0] : latlngs;
+
+            if (latLngs.length < 3) return 0;
+
+            // Převod stupňů na radiány
+            const toRadians = (deg) => deg * Math.PI / 180;
+
+            let area = 0;
+            const earthRadius = 6371000; // Earth radius in meters
+
+            for (let i = 0; i < latLngs.length; i++) {
+              const j = (i + 1) % latLngs.length;
+
+              const lat1 = toRadians(latLngs[i].lat);
+              const lat2 = toRadians(latLngs[j].lat);
+              const lng1 = toRadians(latLngs[i].lng);
+              const lng2 = toRadians(latLngs[j].lng);
+
+              // Shoelace formula pro sféru
+              area += (lng2 - lng1) * (2 + Math.sin(lat1) + Math.sin(lat2));
+            }
+
+            area = Math.abs(area * earthRadius * earthRadius / 2);
+            return area;
+          };
+
+          polygon.on('mouseover', function(e) {
+            const area = calculatePolygonArea(polygon.getLatLngs());
+            // Vždy zobrazovat v m² jak požadováno
+            const areaText = `${Math.round(area)} m²`;
+
+            polygon.bindTooltip(`Plocha: ${areaText}`, {
+              permanent: false,
+              direction: 'center',
+              className: 'area-tooltip'
+            }).openTooltip();
+          });
+
+          polygon.on('mouseout', function(e) {
+            polygon.closeTooltip();
+          });
+        };
+
+        // Re-add area tooltip for confirmed zone
+        addAreaTooltip(zone.polygon);
+
+        // Store confirmed zone
+        window.SSHR_VARIABLE_STATE.zones.push({
+          id: zone.id,
+          polygon: zone.polygon,
+          coordinates: zone.markers.map(marker => [marker.lat, marker.lng])
+        });
+
+        // Clear current zone
+        window.SSHR_VARIABLE_STATE.currentZone = null;
+
+        console.log(`✅ [VARIABLE-ZONES] Zone confirmed. Total confirmed: ${window.SSHR_VARIABLE_STATE.confirmedZones}`);
+      };
+
+      const cancelCurrentZone = () => {
+        if (!window.SSHR_VARIABLE_STATE?.currentZone) return;
+
+        const zone = window.SSHR_VARIABLE_STATE.currentZone;
+
+        // Remove polygon and markers
+        window.leafletMap.removeLayer(zone.polygon);
+        zone.markers.forEach(marker => {
+          if (marker.element && marker.element.parentNode) {
+            marker.element.parentNode.removeChild(marker.element);
+          }
+        });
+
+        // Clean up map event listeners
+        if (zone.cleanupMapEvents) {
+          zone.cleanupMapEvents();
+        }
+
+        // Clear current zone
+        window.SSHR_VARIABLE_STATE.currentZone = null;
+
+        console.log('❌ [VARIABLE-ZONES] Current zone cancelled');
+      };
+
+      // Global zone calculation and application
+      const applyVariableZonesGlobally = () => {
+        console.log('🌍 [VARIABLE-ZONES] Starting global application...');
+
+        if (!window.SSHR_VARIABLE_STATE?.zones?.length) {
+          console.error('No confirmed zones available!');
+          return;
+        }
+
+        try {
+          // Step 1: Get fence perimeter data
+          const fenceData = getFencePerimeter();
+          if (!fenceData) {
+            alert('Chyba: Nelze získat data perimetru FENCE!');
+            return;
+          }
+
+          // Step 2: Convert variable zones to proper format
+          const greenZones = convertVariableZonesToGreenFormat();
+
+          // Step 3: Calculate RED zones using FENCE - GREEN = RED
+          const redZones = calculateRedZones(fenceData, greenZones);
+
+          // Step 4: Update SSHR zone system
+          updateSSHRZoneSystem(greenZones, redZones);
+
+          // Step 5: Recalculate incidents
+          recalculateIncidents();
+
+          // Step 6: Update Animation Layers
+          updateAnimationLayers();
+
+          console.log('✅ [VARIABLE-ZONES] Global application completed successfully');
+          alert('Variabilní zóny byly úspěšně aplikovány!\n\nPřepočítány:\n- GREEN zóny\n- RED zóny (FENCE - GREEN)\n- Incident engine\n- Animation layers');
+
+          // Hide variable interface and return to fixed mode
+          exitToFixed(false);
+
+        } catch (error) {
+          console.error('❌ [VARIABLE-ZONES] Error during global application:', error);
+          alert('Chyba při aplikaci variabilních zón: ' + error.message);
+        }
+      };
+
+      const getFencePerimeter = () => {
+        // Primary source: SSHR_ZONES_API.getFence() - fixed perimeter data (FENCE_COORDS)
+        if (window.SSHR_ZONES_API?.getFence) {
+          const fenceCoords = window.SSHR_ZONES_API.getFence();
+          if (fenceCoords && Array.isArray(fenceCoords) && fenceCoords.length > 0) {
+            console.log('✅ [VARIABLE-ZONES] Found fence perimeter via SSHR_ZONES_API.getFence()');
+            return fenceCoords;
+          }
+        }
+
+        // Fallback: try current state fence
+        if (window.SSHR_ZONES?.fence?.coordinates) {
+          console.log('✅ [VARIABLE-ZONES] Found fence perimeter in SSHR_ZONES.fence.coordinates');
+          return window.SSHR_ZONES.fence.coordinates;
+        }
+
+        // Fallback: try getting from polygon manager
+        if (window.SSHR?.zones?.polygonLayers) {
+          const fence = window.SSHR.zones.polygonLayers.get('fence');
+          if (fence && fence.getLayers && fence.getLayers().length > 0) {
+            const fenceLayer = fence.getLayers()[0];
+            if (fenceLayer.getLatLngs) {
+              console.log('✅ [VARIABLE-ZONES] Found fence perimeter in polygon manager');
+              return fenceLayer.getLatLngs()[0].map(latlng => [latlng.lat, latlng.lng]);
+            }
+          }
+        }
+
+        console.error('❌ [VARIABLE-ZONES] Fence perimeter not found in any location');
+        console.log('🔍 [VARIABLE-ZONES] Debug info:', {
+          'window.SSHR_ZONES_API': !!window.SSHR_ZONES_API,
+          'SSHR_ZONES_API.getFence': window.SSHR_ZONES_API?.getFence ? 'method exists' : 'missing',
+          'window.SSHR_ZONES': !!window.SSHR_ZONES,
+          'SSHR_ZONES.fence': window.SSHR_ZONES?.fence ? 'exists' : 'missing'
+        });
+        return null;
+      };
+
+      const convertVariableZonesToGreenFormat = () => {
+        const greenZones = window.SSHR_VARIABLE_STATE.zones.map((zone, index) => ({
+          id: zone.id,
+          name: `Variable Zone ${index + 1}`,
+          coordinates: zone.coordinates,
+          type: 'GREEN'
+        }));
+
+        console.log('🔄 [VARIABLE-ZONES] Converting variable zones to GREEN format:');
+        console.log(`📊 [VARIABLE-ZONES] ${greenZones.length} zones converted`);
+        greenZones.forEach((zone, index) => {
+          console.log(`  → Zone ${index + 1}: ${zone.name} (${zone.coordinates.length} corners)`);
+        });
+
+        return greenZones;
+      };
+
+      const calculateRedZones = (fence, greenZones) => {
+        console.log('🔴 [VARIABLE-ZONES] Calculating RED zones using FENCE - GREEN = RED');
+
+        // For now, we'll create a simplified RED zone calculation
+        // In a full implementation, this would use Turf.js for proper polygon operations
+        try {
+          // This is a placeholder for the proper FENCE - GREEN = RED calculation
+          // In reality, you'd use turf.difference() or similar geospatial operations
+
+          const redZone = {
+            id: 'red_calculated',
+            name: 'Calculated RED Zone (FENCE - GREEN)',
+            coordinates: fence, // Simplified: using fence as base
+            type: 'RED'
+          };
+
+          console.log('🔴 [VARIABLE-ZONES] RED zone calculated (simplified)');
+          return [redZone];
+
+        } catch (error) {
+          console.error('❌ [VARIABLE-ZONES] Error calculating RED zones:', error);
+          throw new Error('Chyba při výpočtu RED zón');
+        }
+      };
+
+      const ensureClosedCoordinates = (coords = []) => {
+        if (!Array.isArray(coords) || coords.length === 0) {
+          return [];
+        }
+        const normalized = coords.map(([lat, lng]) => [Number(lat), Number(lng)]);
+        const [firstLat, firstLng] = normalized[0];
+        const [lastLat, lastLng] = normalized[normalized.length - 1];
+        if (firstLat !== lastLat || firstLng !== lastLng) {
+          normalized.push([firstLat, firstLng]);
+        }
+        return normalized;
+      };
+
+      const updateSSHRZoneSystem = (greenZones, redZones) => {
+        console.log('🔄 [VARIABLE-ZONES] Updating SSHR zone system...');
+
+        let appliedState = null;
+
+        if (window.SSHR_ZONES_API?.setManagementGreens) {
+          try {
+            const normalizedInput = greenZones.map((zone, index) => ({
+              id: zone.id || `VARIABLE_GREEN_${index + 1}`,
+              name: zone.name || `Variable Zone ${index + 1}`,
+              coordinates: ensureClosedCoordinates(zone.coordinates)
+            }));
+
+            appliedState = window.SSHR_ZONES_API.setManagementGreens(normalizedInput, {
+              source: 'variable_zones_global_confirmation',
+              layoutId: window.SSHR?.activeLayout?.id || null
+            });
+
+            // setManagementGreens already replaced window.SSHR_ZONES with the frozen state
+            window.SSHR_ZONES = appliedState;
+            greenZones = appliedState?.greens || greenZones;
+            redZones = appliedState?.reds || redZones;
+
+            console.log('✅ [VARIABLE-ZONES] SSHR_ZONES_API state updated via setManagementGreens');
+          } catch (error) {
+            console.error('❌ [VARIABLE-ZONES] setManagementGreens failed, falling back to manual update', error);
+          }
+        }
+
+        if (!appliedState) {
+          const previousFence = window.SSHR_ZONES?.fence || null;
+          const fallbackState = {
+            fence: previousFence,
+            greens: greenZones,
+            reds: redZones,
+            helpers: window.SSHR_ZONES?.helpers || null,
+            metadata: {
+              ...(window.SSHR_ZONES?.metadata || {}),
+              generatedAt: new Date().toISOString(),
+              source: 'variable_zones_global_confirmation'
+            },
+            lastUpdated: new Date().toISOString(),
+            source: 'variable_zones_global_confirmation'
+          };
+
+          window.SSHR_ZONES = Object.freeze(fallbackState);
+          appliedState = fallbackState;
+        }
+
+        console.log('📊 [VARIABLE-ZONES] Updated zones:', {
+          greenCount: greenZones.length,
+          redCount: redZones.length,
+          source: window.SSHR_ZONES.source
+        });
+
+        console.log('🔍 [VARIABLE-ZONES] VERIFICATION - window.SSHR_ZONES after update:');
+        console.log('  → window.SSHR_ZONES exists:', !!window.SSHR_ZONES);
+        console.log('  → greens array length:', window.SSHR_ZONES.greens?.length || 0);
+        console.log('  → reds array length:', window.SSHR_ZONES.reds?.length || 0);
+        console.log('  → source:', window.SSHR_ZONES.source);
+        if (window.SSHR_ZONES.greens?.length > 0) {
+          console.log('  → First green zone sample:', window.SSHR_ZONES.greens[0]);
+        }
+
+        // Update polygon manager if available
+        if (window.SSHR?.polygonManager) {
+          window.SSHR.polygonManager.clearAllZones?.();
+          const pm = window.SSHR.polygonManager;
+          (window.SSHR_ZONES.greens || []).forEach(zone => pm.addZone?.(zone, 'green'));
+          (window.SSHR_ZONES.reds || []).forEach(zone => pm.addZone?.(zone, 'red'));
+        }
+
+        // Emit custom event for other systems that might need to know about zone updates
+        window.dispatchEvent(new CustomEvent('sshr-zones-data-updated', {
+          detail: {
+            greens: greenZones,
+            reds: redZones,
+            source: 'variable_zones_global_confirmation',
+            timestamp: new Date().toISOString()
+          }
+        }));
+      };
+
+      const recalculateIncidents = () => {
+        console.log('⚡ [VARIABLE-ZONES] Recalculating incidents...');
+
+        if (window.SSHRIncidentEngine) {
+          // Trigger incident recalculation
+          window.SSHRIncidentEngine.recalculateAllIncidents?.();
+
+          // Emit event for incident system update
+          window.dispatchEvent(new CustomEvent('sshr-zones-updated', {
+            detail: {
+              source: 'variable_zones',
+              timestamp: new Date().toISOString()
+            }
+          }));
+
+          console.log('✅ [VARIABLE-ZONES] Incidents recalculated');
+        }
+      };
+
+      const updateAnimationLayers = () => {
+        console.log('🎭 [VARIABLE-ZONES] Updating animation layers with new zone data...');
+
+        // First, clear any existing polygon layers
+        if (window.SSHR?.zones) {
+          console.log('🗑️ [ANIMATION-LAYERS] Clearing existing polygon layers...');
+          window.SSHR.zones.removeLayerType?.('green-polylines');
+          window.SSHR.zones.removeLayerType?.('green-polygons');
+          window.SSHR.zones.removeLayerType?.('red-polylines');
+          window.SSHR.zones.removeLayerType?.('red-polygons');
+        }
+
+        // Force reload of polygon layers with updated SSHR_ZONES data
+        const polygonCheckboxes = document.querySelectorAll('input[name="polygon-layer"]');
+        const checkedLayers = [];
+
+        // Store which layers are currently checked
+        polygonCheckboxes.forEach(checkbox => {
+          if (checkbox.checked) {
+            checkedLayers.push(checkbox.value);
+          }
+        });
+
+        // Uncheck all layers first
+        polygonCheckboxes.forEach(checkbox => {
+          if (checkbox.checked) {
+            checkbox.checked = false;
+          }
+        });
+
+        // Wait a moment, then re-check the layers to trigger reload with new data
+        setTimeout(() => {
+          console.log('🔄 [ANIMATION-LAYERS] Re-enabling polygon layers with updated zone data...');
+          checkedLayers.forEach(layerValue => {
+            const checkbox = document.querySelector(`input[name="polygon-layer"][value="${layerValue}"]`);
+            if (checkbox) {
+              checkbox.checked = true;
+            }
+          });
+
+          // CRITICAL: Directly call handleLayerChange() to ensure animation layers reload with new data
+          console.log('🎯 [ANIMATION-LAYERS] Directly triggering handleLayerChange() with updated zone data...');
+          if (typeof handleLayerChange === 'function') {
+            handleLayerChange();
+          } else {
+            console.error('❌ [ANIMATION-LAYERS] handleLayerChange function not found!');
+          }
+
+          console.log(`✅ [ANIMATION-LAYERS] Updated ${checkedLayers.length} polygon layers with new variable zones`);
+        }, 100);
+      };
+
+      const startFloatMode = (options = {}) => {
+        console.log('🚫 [FLOAT-MODE] FLOAT mode disabled - Management zones functionality removed');
+      };
+
+      const stopFloatMode = () => {
+        console.log('🛑 [FLOAT-MODE] Stopping FLOAT mode and cleaning up state');
+
+        zoneCountControls?.classList.add('d-none');
+
+        const pm = getPolygonManager();
+        if (pm) {
+          pm.disableDrawing?.();
+          pm.removeAllCornerHandles?.();
+        }
+
+        const indicator = document.getElementById('polygon-mode-indicator');
+        if (indicator) {
+          indicator.textContent = 'VARIABLE';
+          indicator.className = 'badge bg-info';
+        }
+        const info = document.querySelector('#variable-zone-controls .mode-info');
+        if (info) {
+          const confirmed = pm?.confirmedZones?.size ?? 0;
+          const pending = pm?.pendingZones?.size ?? 0;
+          const limit = pm?.managementLimit ?? maxZones ?? 0;
+          if (pending > 0) {
+            info.textContent = `Variabilní režim (${confirmed} potvrzeno, ${pending} čeká na potvrzení/${limit} zón)`;
+            info.style.color = '#fbbf24';
+          } else {
+            info.textContent = `Variabilní režim (${confirmed}/${limit} zón potvrzeno)`;
+            info.style.color = '#38bdf8';
+          }
+        }
+
+                console.log('✅ [FLOAT-MODE] FLOAT mode stopped and cleanup completed');
+      };
+
+      // Mode selection change
+      modeSelect.addEventListener('change', () => {
+        if (modeSelect.value === 'variable') {
+          enterVariableMode();
+        } else {
+          exitToFixed(true);
+        }
+      });
+
+      // Float mode toggle
+      if (floatToggle) {
+        floatToggle.addEventListener('change', () => {
+          if (floatToggle.checked) {
+            startFloatMode({ preserveExisting: false });
+          } else {
+            stopFloatMode();
+          }
+        });
+      }
+
+      // Zone count change
+      countSelect?.addEventListener('change', () => {
+        if (floatToggle && floatToggle.checked) {
+          maxZones = parseInt(countSelect.value ?? '4', 10) || 4;
+          const pm = getPolygonManager();
+          pm?.setManagementLimit?.(maxZones);
+          const info = document.querySelector('#variable-zone-controls .mode-info');
+          if (info) {
+            info.textContent = `Variabilní režim (${maxZones} zón)`;
+            info.style.color = '#38bdf8';
+          }
+                  }
+      });
+
+      // New Variable Zones Event Listeners
+
+      // Active corners count change
+      const activeCornersSelect = document.getElementById('active-corners-count');
+      activeCornersSelect?.addEventListener('change', () => {
+        if (window.SSHR_VARIABLE_STATE) {
+          window.SSHR_VARIABLE_STATE.cornersCount = parseInt(activeCornersSelect.value);
+          console.log(`🔺 [VARIABLE-ZONES] Active corners changed to: ${window.SSHR_VARIABLE_STATE.cornersCount}`);
+        }
+      });
+
+      // Variable zones count change
+      const variableZonesSelect = document.getElementById('variable-zones-count');
+      variableZonesSelect?.addEventListener('change', () => {
+        if (window.SSHR_VARIABLE_STATE) {
+          window.SSHR_VARIABLE_STATE.totalZones = parseInt(variableZonesSelect.value);
+          console.log(`🎯 [VARIABLE-ZONES] Total zones changed to: ${window.SSHR_VARIABLE_STATE.totalZones}`);
+          updateZoneCounters();
+          updateGlobalButtons();
+        }
+      });
+
+      // Panel buttons
+      const startDrawingBtn = document.getElementById('start-drawing-btn');
+      const confirmZoneBtn = document.getElementById('confirm-zone-btn');
+      const cancelZoneBtn = document.getElementById('cancel-zone-btn');
+
+      startDrawingBtn?.addEventListener('click', () => {
+        console.log('🎨 [VARIABLE-ZONES] Start drawing zone');
+        startZoneDrawing();
+        confirmZoneBtn.disabled = false;
+        cancelZoneBtn.disabled = false;
+        startDrawingBtn.disabled = true;
+      });
+
+      confirmZoneBtn?.addEventListener('click', () => {
+        if (window.SSHR_VARIABLE_STATE) {
+          confirmCurrentZone();
+          window.SSHR_VARIABLE_STATE.confirmedZones++;
+          console.log(`✅ [VARIABLE-ZONES] Zone confirmed. Total: ${window.SSHR_VARIABLE_STATE.confirmedZones}/${window.SSHR_VARIABLE_STATE.totalZones}`);
+
+          updateZoneCounters();
+          updateGlobalButtons();
+
+          // Reset buttons for next zone
+          startDrawingBtn.disabled = false;
+          confirmZoneBtn.disabled = true;
+          cancelZoneBtn.disabled = true;
+        }
+      });
+
+      cancelZoneBtn?.addEventListener('click', () => {
+        console.log('❌ [VARIABLE-ZONES] Zone cancelled');
+        cancelCurrentZone();
+        startDrawingBtn.disabled = false;
+        confirmZoneBtn.disabled = true;
+        cancelZoneBtn.disabled = true;
+      });
+
+      // Global buttons
+      const globalConfirmBtn = document.getElementById('global-confirm-zones-btn');
+      const globalCancelBtn = document.getElementById('global-cancel-zones-btn');
+
+      globalConfirmBtn?.addEventListener('click', () => {
+        console.log('🌍 [VARIABLE-ZONES] Global confirmation - implementing FENCE - GREEN = RED calculation');
+
+        if (!window.SSHR_VARIABLE_STATE?.zones?.length) {
+          alert('Nejsou k dispozici žádné potvrzené zóny!');
+          return;
+        }
+
+        if (window.confirm('Chcete aplikovat nové variabilní zóny a přepočítat incident engine?')) {
+          applyVariableZonesGlobally();
+        }
+      });
+
+      globalCancelBtn?.addEventListener('click', () => {
+        if (window.confirm('Opravdu chcete zrušit všechny variabilní zóny a vrátit se do fixního režimu?')) {
+          console.log('🗑️ [VARIABLE-ZONES] All zones cancelled, switching to fixed mode');
+
+          // Remove all polygons from map
+          if (window.SSHR_VARIABLE_STATE?.zones) {
+            window.SSHR_VARIABLE_STATE.zones.forEach(zone => {
+              if (zone.polygon && window.leafletMap) {
+                window.leafletMap.removeLayer(zone.polygon);
+              }
+            });
+          }
+
+          // Reset state
+          window.SSHR_VARIABLE_STATE.confirmedZones = 0;
+          window.SSHR_VARIABLE_STATE.zones = [];
+          updateZoneCounters();
+          updateGlobalButtons();
+
+          // Reset buttons
+          startDrawingBtn.disabled = false;
+          confirmZoneBtn.disabled = true;
+          cancelZoneBtn.disabled = true;
+
+          // Switch back to fixed mode and reset map
+          modeSelect.value = 'fixed';
+          exitToFixed(true);
+        }
+      });
+
+      // Zone drawing completed event with individual confirmation workflow
+      // Wait for polygon manager to be available before registering event listener
+      const waitForPolygonManager = () => {
+        const pm = getPolygonManager();
+        if (pm) {
+          console.log('🔧 [EVENT-LISTENER] Polygon manager found, registering zone-drawn event listener');
+          window.addEventListener('zone-drawn', (e) => {
+            console.log('🎉 [ZONE-DRAWN-EVENT] Event received!', e.detail);
+            console.log('🔍 [ZONE-DRAWN-EVENT] Event target window:', e.target === window ? 'SAME' : 'DIFFERENT');
+            console.log('🔍 [ZONE-DRAWN-EVENT] Current polygon manager:', getPolygonManager());
+            const { confirmed, pending, limit, awaitingConfirmation } = e.detail;
+            const totalDrawn = confirmed + pending;
+
+            console.log('🔄 [ZONE-DRAWN-EVENT] Calling rebuildZonePanel...');
+
+        // Update zone counter in UI
+        const info = document.querySelector('#variable-zone-controls .mode-info');
+        if (info) {
+          if (pending > 0 && awaitingConfirmation) {
+            info.textContent = `Variabilní režim (${confirmed} potvrzeno, 1 čeká na ruční potvrzení/${limit} zón)`;
+            info.style.color = '#fbbf24'; // Amber for pending manual confirmation
+          } else if (pending > 0) {
+            info.textContent = `Variabilní režim (${confirmed} potvrzeno, ${pending} čeká na potvrzení/${limit} zón)`;
+            info.style.color = '#fbbf24'; // Amber for pending
+          } else if (confirmed === limit) {
+            info.textContent = `Variabilní režim (${confirmed}/${limit} zón DOKONČENO)`;
+            info.style.color = '#28a745'; // Green when all confirmed
+          } else {
+            info.textContent = `Variabilní režim (${confirmed}/${limit} zón potvrzeno)`;
+            info.style.color = '#38bdf8'; // Blue for progress
+          }
+        }
+
+        // Show polygon confirmation button when zone is drawn and awaiting confirmation
+        if (awaitingConfirmation && pending > 0) {
+          console.log(`🔲 [SSHR-UI] Zone drawn, showing manual confirmation button`);
+        }
+
+        // Show global confirmation button when all zones are individually confirmed
+        if (confirmed === limit && pending === 0) {
+          const pm = getPolygonManager();
+          if (pm) {
+            pm.disableDrawing?.(); // Ensure drawing is disabled
+          }
+
+          // Enable global confirmation
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.backgroundColor = '#28a745';
+            confirmBtn.style.borderColor = '#28a745';
+          }
+
+          console.log(`🎯 [SSHR-UI] All ${limit} zones individually confirmed, ready for global confirmation`);
+        } else if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.style.backgroundColor = '#1e293b';
+          confirmBtn.style.borderColor = '#1e293b';
+        }
+          });
+        } else {
+          console.log('⏳ [EVENT-LISTENER] Polygon manager not ready, retrying in 200ms...');
+          setTimeout(waitForPolygonManager, 200);
+        }
+      };
+
+      // Start waiting for polygon manager
+      waitForPolygonManager();
+
+      // Zone confirmed event listener
+      window.addEventListener('zone-confirmed', (e) => {
+        const { confirmed, pending, limit } = e.detail;
+
+
+        // Update zone counter in UI
+        const info = document.querySelector('#variable-zone-controls .mode-info');
+        if (info) {
+          if (confirmed === limit) {
+            info.textContent = `Variabilní režim (${confirmed}/${limit} zón DOKONČENO)`;
+            info.style.color = '#28a745'; // Green when all confirmed
+          } else {
+            info.textContent = `Variabilní režim (${confirmed}/${limit} zón potvrzeno)`;
+            info.style.color = '#38bdf8'; // Blue for progress
+          }
+        }
+
+        // Enable global confirmation if all zones confirmed
+        if (confirmed === limit && pending === 0) {
+          if (confirmBtn) {
+            confirmBtn.disabled = false;
+            confirmBtn.style.backgroundColor = '#28a745';
+            confirmBtn.style.borderColor = '#28a745';
+          }
+        } else if (confirmBtn) {
+          confirmBtn.disabled = true;
+          confirmBtn.style.backgroundColor = '#1e293b';
+          confirmBtn.style.borderColor = '#1e293b';
+        }
+      });
+
+      window.addEventListener('zone-deleted', () => {
+                      });
+
+      window.addEventListener('sshr-layout-activated', (event) => {
+        const layout = event?.detail?.layout;
+        if (layout) {
+          window.SSHR = window.SSHR || {};
+          window.SSHR.activeLayout = layout;
+          updateLayoutSummary(layout);
+        }
+      });
+
+      window.addEventListener('sshr-zones-updated', () => {
+        updateLayoutSummary(window.SSHR?.activeLayout || null);
+      });
+
+      // Global confirmation of all individually confirmed zones
+      confirmBtn?.addEventListener('click', () => {
+        const pm = getPolygonManager();
+        if (!pm) return;
+
+        if (pm.managementLimit == null || pm.confirmedZones.size !== pm.managementLimit) {
+          alert(`Nelze globálně potvrdit. Potvrzeno je ${pm.confirmedZones.size}/${pm.managementLimit ?? 0} zón.\nNakreslete a potvrďte všechny zóny jednotlivě.`);
+          return;
+        }
+
+        const zones = pm.getZones ? pm.getZones('green') : [];
+        if (!zones.length) {
+          alert('Žádné zóny k potvrzení.');
+          return;
+        }
+
+        const finalConfirm = window.confirm(`Chcete finálně potvrdit všechny ${zones.length} variabilní zóny? ANO/NE`);
+        if (!finalConfirm) return;
+
+        const backupZones = window.SSHR_ZONES_API?.getManagementGreens?.() || [];
+
+        try {
+          const exportedZones = pm.exportZones ? pm.exportZones() : null;
+          if (exportedZones && exportedZones.green) {
+            const layout = typeof pm.activateCurrentLayout === 'function'
+              ? pm.activateCurrentLayout({
+                  confirmedBy: window.SSHR?.operatorName || 'Management UI'
+                })
+              : null;
+
+            const layoutGreens = layout?.greens || exportedZones.green;
+            const layoutOptions = layout
+              ? {
+                  layoutId: layout.id,
+                  confirmedAt: layout.confirmedAt,
+                  confirmedBy: layout.confirmedBy
+                }
+              : {};
+
+            window.SSHR_ZONES_API?.setManagementGreens(layoutGreens, layoutOptions);
+
+            const savedZones = window.SSHR_ZONES_API?.getManagementGreens?.();
+            if (!savedZones || savedZones.length !== layoutGreens.length) {
+              throw new Error('Uložené zóny se neshodují s očekávaným počtem');
+            }
+
+            if (window.SSHR?.incidentEngine) {
+              window.SSHR.incidentEngine.updateZones?.(layoutGreens, {
+                layoutId: layout?.id || null,
+                source: 'management-confirm'
+              });
+            }
+
+            window.dispatchEvent(new CustomEvent('sshr-zones-updated', {
+              detail: {
+                zones: layoutGreens,
+                type: 'variable',
+                layoutId: layout?.id || null
+              }
+            }));
+
+            if (layout) {
+              window.SSHR = window.SSHR || {};
+              window.SSHR.activeLayout = layout;
+              updateLayoutSummary(layout);
+              if (window.SSHRIncidentEngine?.setLayoutContext) {
+                window.SSHRIncidentEngine.setLayoutContext(layout);
+              }
+            }
+          }
+
+          pm.disableDrawing?.();
+          confirmBtn.disabled = true;
+          confirmBtn.style.backgroundColor = '#1e293b';
+          confirmBtn.style.borderColor = '#1e293b';
+                              modeSelect.value = 'variable';
+          updateHeaderZoneType('variable');
+          const completionInfo = document.querySelector('#variable-zone-controls .mode-info');
+          if (completionInfo && pm.managementLimit) {
+            completionInfo.textContent = `Variabilní režim (${pm.managementLimit}/${pm.managementLimit} zón DOKONČENO)`;
+            completionInfo.style.color = '#34d399';
+          }
+          if (!layout) {
+            updateLayoutSummary(window.SSHR?.activeLayout || null);
+          }
+          console.log('✅ [ZONES] Variabilní zóny potvrzeny a aktivovány.');
+
+        } catch (error) {
+          console.error('❌ [SSHR-UI] setManagementGreens failed', error);
+
+          if (backupZones.length > 0) {
+            try {
+              window.SSHR_ZONES_API?.setManagementGreens(backupZones);
+              console.log('🔄 [ZONES] Obnoveny záložní zóny po chybě');
+            } catch (revertError) {
+              console.error('❌ [ZONES] Nepovedlo se obnovit záložní zóny', revertError);
+            }
+          }
+
+          const retryOption = window.confirm(
+            'Nepodařilo se uložit variabilní zóny: ' + error.message + '\n\n' +
+            'Chcete se vrátit k úpravám a zkusit to znovu?\n\n' +
+            'ANO = Vrátit se k úpravám\n' +
+            'NE = Zrušit a vrátit se k fixním zónám'
+          );
+
+          if (retryOption) {
+            startFloatMode({ preserveExisting: true });
+          } else {
+            modeSelect.value = 'fixed';
+            exitToFixed(true);
+          }
+        }
+      });
+
+      // Modify zones
+      modifyBtn?.addEventListener('click', () => {
+        // Allow user to continue editing
+        startFloatMode({ preserveExisting: true });
+              });
+
+      // Cancel zones
+      cancelBtn?.addEventListener('click', () => {
+        if (confirm('Opravdu chcete zrušit všechna nakreslená data?')) {
+          modeSelect.value = 'fixed';
+          exitToFixed(true);
+        }
+      });
+
+      // Shape selector event listeners
+      document.querySelectorAll('.shape-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+          // Update active button
+          document.querySelectorAll('.shape-btn').forEach(b => b.classList.remove('active'));
+          btn.classList.add('active');
+
+          const corners = parseInt(btn.dataset.corners);
+          const pm = getPolygonManager();
+          if (pm) {
+            pm.setSelectedShape?.(corners);
+          }
+          console.log(`🔺 [SHAPE-SELECTOR] Selected ${corners}-sided polygon`);
+        });
+      });
+
+      // Reshape controls event listeners
+      const reshapeConfirmBtn = document.getElementById('reshape-confirm-btn');
+      const reshapeCancelBtn = document.getElementById('reshape-cancel-btn');
+
+      reshapeConfirmBtn?.addEventListener('click', () => {
+        const pm = getPolygonManager();
+        if (pm && pm.activeReshapeZoneId) {
+          pm.confirmReshape(pm.activeReshapeZoneId);
+        }
+      });
+
+      reshapeCancelBtn?.addEventListener('click', () => {
+        const pm = getPolygonManager();
+        if (pm && pm.activeReshapeZoneId) {
+          pm.cancelReshape(pm.activeReshapeZoneId);
+        }
+      });
+
+
+      // Initialize with FIXED mode
+      exitToFixed(false);
+    }
+
+    function getSelectedParallelDatasets() {
+      return Array.from(selectedPersonDatasets);
+    }
+
+    function getSelectedVehicleDatasets() {
+      return Array.from(document.querySelectorAll('.vehicle-dataset-checkbox:checked'))
+        .filter(input => !input.disabled)
+        .map(input => input.value);
+    }
+
+    function setupParallelControls(engine) {
+      const loadBtn = document.getElementById('parallel-load-btn');
+      const clearBtn = document.getElementById('parallel-clear-btn');
+      const panelStack = document.getElementById('parallel-panels');
+
+      if (!loadBtn || !clearBtn || !panelStack || !engine) {
+        console.warn('⚠️ [SSHR-UI] Parallel controls missing required elements');
+        return;
+      }
+
+      window.sshrParallelAnimationActive = false;
+
+      registerPersonDatasets(engine);
+      registerVehicleDatasets(engine);
+      setupTrackingModeControls(engine);
+      setupGreenPolygonControls();
+
+      const getDatasetInputs = () =>
+        document.querySelectorAll('#forensic-date-dropdowns .dropdown-toggle, .vehicle-dataset-checkbox');
+
+      // State management: loading = datasets cached, animating = animation running
+      let datasetsLoaded = false;
+      let animationRunning = false;
+
+      const setLoadingState = (loaded) => {
+        datasetsLoaded = loaded;
+        loadBtn.disabled = loaded;
+        clearBtn.disabled = !loaded;
+
+        // Update button text to show state
+        if (loaded) {
+          loadBtn.innerHTML = '<i class="fas fa-check me-1"></i>Načteno';
+          clearBtn.innerHTML = '<i class="fas fa-trash me-1"></i>Vyčistit';
+        } else {
+          loadBtn.innerHTML = '<i class="fas fa-download me-1"></i>Načíst';
+          clearBtn.innerHTML = '<i class="fas fa-trash me-1"></i>Vyčistit';
+        }
+      };
+
+      const setAnimationState = (running) => {
+        animationRunning = running;
+        window.sshrParallelAnimationActive = animationRunning;
+        // During animation, disable dataset selection but keep load/clear enabled
+        getDatasetInputs().forEach(control => {
+          if (running) {
+            control.dataset.prevDisabled = control.disabled ? 'true' : 'false';
+            control.disabled = true;
+          } else {
+            const shouldRemainDisabled = control.dataset.prevDisabled === 'true';
+            control.disabled = shouldRemainDisabled;
+            delete control.dataset.prevDisabled;
+          }
+        });
+        const modeSelect = document.getElementById('tracking-mode-select');
+        if (modeSelect) modeSelect.disabled = running;
+        const greenModeSelect = document.getElementById('green-polygons-mode');
+        if (greenModeSelect) greenModeSelect.disabled = running;
+        const variableControls = document.getElementById('variable-zone-controls');
+        if (variableControls) {
+          variableControls.querySelectorAll('input, select, button').forEach(el => {
+            console.log(`🔒 [ANIMATION-STATE] ${running ? 'Disabling' : 'Enabling'} control: ${el.id || el.className}`);
+            el.disabled = running;
+            if (running) {
+              el.setAttribute('disabled', 'disabled');
+            } else {
+              el.removeAttribute('disabled');
+            }
+          });
+        }
+        panelStack.classList.toggle('hidden', !running);
+      };
+
+      // Initialize states
+      setLoadingState(false);
+      setAnimationState(engine.isActive());
+
+      // Global cache for loaded datasets
+      window.sshrDatasetCache = {
+        mode: null,
+        datasets: [],
+        vehicleDatasets: []
+      };
+
+      // LOAD button - load datasets into cache (prepare for animation)
+      loadBtn.addEventListener('click', () => {
+        console.log('📥 [SSHR-SIDEBAR] Loading datasets into cache...');
+
+        if (currentTrackingMode === 'single') {
+          const selected = getSelectedParallelDatasets();
+          if (selected.length !== 1) {
+            alert('Pro režim Single vyberte přesně jednu krávu v sekci Forenzní analýza.');
+            return;
+          }
+          window.forensicAnalysisCache = {
+            mode: 'single',
+            datasets: selected,
+            vehicleDatasets: []
+          };
+        } else if (currentTrackingMode === 'parallel') {
+          const cattleDatasets = getSelectedParallelDatasets();
+          if (!cattleDatasets.length) {
+            alert('Vyberte alespoň jeden dataset krávy pro parallel animaci.');
+            return;
+          }
+          window.forensicAnalysisCache = {
+            mode: 'parallel',
+            datasets: cattleDatasets,
+            vehicleDatasets: []
+          };
+        } else if (currentTrackingMode === 'parallel-extra') {
+          const cattleDatasets = getSelectedParallelDatasets();
+          if (!cattleDatasets.length) {
+            alert('Vyberte alespoň jeden dataset krávy pro Parallel EXTRA.');
+            return;
+          }
+          const vehicleDatasets = getSelectedVehicleDatasets();
+          window.forensicAnalysisCache = {
+            mode: 'parallel-extra',
+            datasets: cattleDatasets,
+            vehicleDatasets: vehicleDatasets
+          };
+        }
+
+        setLoadingState(true);
+        console.log('🔍 [FORENSIC] Datasets loaded into forensic analysis cache:', window.forensicAnalysisCache);
+      });
+
+      // CLEAR button - clear dataset cache
+      clearBtn.addEventListener('click', () => {
+        console.log('🗑️ [SSHR-SIDEBAR] Clearing dataset cache...');
+        window.forensicAnalysisCache = {
+          mode: null,
+          datasets: [],
+          vehicleDatasets: []
+        };
+        setLoadingState(false);
+        selectedPersonDatasets.clear();
+        refreshCurrentForensicPanel();
+
+        // Reset tracking mode to default (single)
+        const trackingModeSelect = document.getElementById('tracking-mode-select');
+        if (trackingModeSelect) {
+          trackingModeSelect.value = 'single';
+          trackingModeSelect.dispatchEvent(new Event('change'));
+          console.log('🔄 [SSHR-SIDEBAR] Tracking mode reset to single');
+        }
+
+        // Reset Animation Layers to default state (Bez kotev, nic nezaškrtnuto)
+        const bezKotevRadio = document.querySelector('input[name="anchor-layer"][value="bez-kotev"]');
+        if (bezKotevRadio) {
+          bezKotevRadio.checked = true;
+          bezKotevRadio.dispatchEvent(new Event('change'));
+          console.log('🔄 [SSHR-SIDEBAR] Animation layers reset to default (Bez kotev)');
+        }
+
+        // Uncheck all polygon checkboxes
+        const polygonCheckboxes = document.querySelectorAll('input[name="polygon-layer"]');
+        polygonCheckboxes.forEach(checkbox => {
+          if (checkbox.checked) {
+            checkbox.checked = false;
+            checkbox.dispatchEvent(new Event('change'));
+          }
+        });
+        console.log('🔄 [SSHR-SIDEBAR] All polygon layers unchecked');
+
+        console.log('✅ [SSHR-SIDEBAR] Dataset cache cleared');
+      });
+
+      engine.on('dataset-registered', (evt) => {
+        const datasetName = evt?.detail?.name || '';
+        if (datasetName.startsWith('SSHR_DATA')) {
+          registerPersonDatasets(engine);
+        }
+        if (datasetName.startsWith('SSHR_VEHICLE')) {
+          registerVehicleDatasets(engine);
+        }
+        refreshCurrentForensicPanel();
+      });
+
+      engine.on('session-start', () => setAnimationState(true));
+      engine.on('session-stop', () => {
+        setAnimationState(false);
+      });
+      engine.on('tracks-finished', (evt) => {
+        const datasets = evt?.detail?.datasets || [];
+        datasets.forEach(name => {
+          window.SSHRParallelUI?.setStatus?.(name, 'DONE', 'success');
+        });
+      });
+
+      if (window.SSHRIncidentEngine?.on) {
+        window.SSHRIncidentEngine.on('incident-start', (evt) => {
+          const datasetName = evt?.detail?.dataset;
+          if (datasetName) {
+            window.SSHRParallelUI?.setStatus?.(datasetName, 'INCIDENT', 'danger');
+          }
+        });
+
+        window.SSHRIncidentEngine.on('incident-resolve', (evt) => {
+          const datasetName =
+            evt?.detail?.dataset ||
+            evt?.detail?.startSample?.dataset ||
+            evt?.detail?.endSample?.dataset ||
+            null;
+          if (datasetName) {
+            window.SSHRParallelUI?.setStatus?.(datasetName, 'LIVE', 'live');
+          }
+        });
+      }
+    }
+
+    function createParallelUIAdapter() {
+      const container = document.getElementById('parallel-panels');
+      const panels = new Map();
+
+      if (!container) {
+        console.warn('⚠️ [SSHR-UI] Parallel panel container not found');
+        return {
+          addPanel: () => {},
+          updatePanel: () => {},
+          removePanel: () => {},
+          setStatus: () => {}
+        };
+      }
+
+      const formatTime = (sample) => {
+        if (!sample) return '—';
+        if (sample.raw?.timestamp) {
+          return sample.raw.timestamp.split('T')[1]?.replace('Z', '') || sample.raw.timestamp;
+        }
+        if (sample.timestamp instanceof Date) {
+          return sample.timestamp.toLocaleTimeString('cs-CZ');
+        }
+        return '—';
+      };
+
+      const statusClassMap = {
+        default: 'status-pill--neutral',
+        live: 'status-pill--live',
+        success: 'status-pill--success',
+        danger: 'status-pill--danger',
+        warning: 'status-pill--warning',
+        neutral: 'status-pill--neutral'
+      };
+
+      const applyStatus = (panel, text, variant = 'default') => {
+        if (!panel) return;
+        const statusEl = panel.querySelector('[data-field="status"]');
+        if (statusEl) {
+          statusEl.textContent = text;
+          statusEl.className = `parallel-panel__status status-pill ${statusClassMap[variant] || statusClassMap.default}`;
+        }
+      };
+
+      const adapter = {
+        addPanel(track) {
+          if (!track?.name) return;
+          if (panels.has(track.name)) return;
+
+          const panel = document.createElement('div');
+          panel.className = 'parallel-panel';
+          panel.dataset.dataset = track.name;
+          panel.dataset.panelId = track.cowId || track.name;
+          panel.innerHTML = `
+            <div class="parallel-panel__header">
+              <span>${track.name}</span>
+              <span class="parallel-panel__status status-pill status-pill--live" data-field="status">LIVE</span>
+            </div>
+            <div class="parallel-panel__body">
+              <div><span>Čas</span><span data-field="time">—</span></div>
+              <div><span>Lat</span><span data-field="lat">—</span></div>
+              <div><span>Lng</span><span data-field="lng">—</span></div>
+              <div><span>Incidenty</span><span data-info="incidents" style="color: #6b7280;">0</span></div>
+            </div>
+          `;
+
+          container.appendChild(panel);
+          applyStatus(panel, 'LIVE', 'live');
+          panels.set(track.name, panel);
+        },
+
+        updatePanel(track, sample) {
+          if (!track?.name) return;
+          const panel = panels.get(track.name);
+          if (!panel) return;
+
+          const timeField = panel.querySelector('[data-field="time"]');
+          const latField = panel.querySelector('[data-field="lat"]');
+          const lngField = panel.querySelector('[data-field="lng"]');
+
+          if (timeField) timeField.textContent = formatTime(sample);
+          if (latField) latField.textContent = Number(sample?.lat)?.toFixed(6) || '—';
+          if (lngField) lngField.textContent = Number(sample?.lng)?.toFixed(6) || '—';
+        },
+
+        removePanel(track) {
+          const key = typeof track === 'string' ? track : track?.name;
+          if (!key) return;
+
+          const panel = panels.get(key);
+          if (panel && panel.parentElement) {
+            panel.parentElement.removeChild(panel);
+          }
+          panels.delete(key);
+        },
+
+        setStatus(trackName, statusText, variant = 'default') {
+          const panel = panels.get(trackName);
+          applyStatus(panel, statusText, variant);
+        }
+      };
+
+      window.SSHRParallelUI = adapter;
+      return adapter;
+    }
+
+    // Export for console access
+    window.SSHR_UI = {
+      updateStatus: updateSystemStatus,
+      updatePersonCount: updatePersonCount,
+      setupPolygonModeControls: setupPolygonModeControls,
+      setupParallelControls: setupParallelControls
+    };
+
+    window.addEventListener('sshr-zones-updated', function(e) {
+      console.log('♻️ [SSHR-UI] Zones updated', e.detail);
+      if (typeof renderSSHRZones === 'function' && window.sshrMap) {
+        renderSSHRZones(window.sshrMap);
+      }
+      const polygonManager = window.SSHR?.polygonManager || window.sshrPolygonManager || null;
+      if (polygonManager && polygonManager.mode === 'FIXED') {
+        polygonManager.clearAllZones();
+        polygonManager.loadFixedZones();
+      }
+      if (window.SSHRIncidentEngine) {
+        window.SSHRIncidentEngine.initialise({
+          polygonManager: polygonManager,
+          incidentManager: window.SSHR?.incidentManager || null
+        });
+      }
+    });
+
+    window.addEventListener('sshr-management-limit-exceeded', function(e) {
+      alert(`Maximální počet GREEN zón (${e.detail?.limit}) byl dosažen. Nejprve potvrďte nebo smažte existující polygon.`);
+    });
+
+    // ============================================================================
+    // CEPRO-Style Control Panels Functionality
+    // ============================================================================
+
+    // Speed control variables (CEPRO style: 1x, 3x, 5x, 10x, 20x)
+    const sshrSpeeds = [1, 3, 5, 10, 20];
+    let sshrSpeedIdx = 0;
+    let sshrPlaybackSpeed = 0; // Default: stopped
+    let sshrAnimationActive = false;
+
+    // Panel toggle function
+    function toggleSSHRControlPanel(panelId) {
+      const content = document.getElementById(panelId + '-content');
+      const icon = document.getElementById(panelId + '-icon');
+
+      if (content && icon) {
+        if (content.style.display === 'none') {
+          // Show panel
+          content.style.display = 'block';
+          icon.style.transform = 'rotate(0deg)';
+        } else {
+          // Hide panel
+          content.style.display = 'none';
+          icon.style.transform = 'rotate(-90deg)';
+        }
+      }
+    }
+
+    // Speed display update
+    function updateSSHRSpeedDisplay() {
+      const el = document.getElementById('sshr-speed-display');
+      if (!el) return;
+      el.textContent = sshrPlaybackSpeed === 0 ? '0x' :
+                      sshrPlaybackSpeed === 1 ? '1x' : `${sshrPlaybackSpeed}x`;
+    }
+
+    // Control panel event handlers
+    document.addEventListener('DOMContentLoaded', function() {
+      // RUN Button - Start animation from cached datasets
+      document.getElementById('sshr-startBtn')?.addEventListener('click', () => {
+        console.log('🎬 [SSHR-CONTROLS] RUN button clicked');
+
+        // Check if datasets are loaded in cache (check both forensic and real-time caches)
+        const forensicCache = window.forensicAnalysisCache;
+        const realtimeCache = window.realtimeMonitoringCache;
+
+        let activeCache = null;
+        if (forensicCache && forensicCache.datasets && forensicCache.datasets.length > 0) {
+          activeCache = forensicCache;
+          console.log('🔍 [CONTROLS] Using Forensic Analysis cache');
+        } else if (realtimeCache && realtimeCache.datasets && Object.keys(realtimeCache.datasets).length > 0) {
+          // Convert real-time cache object format to array format for compatibility
+          // Parallel engine expects dataset NAMES, not the data itself
+          const datasetNames = Object.keys(realtimeCache.datasets);
+          activeCache = {
+            mode: 'parallel-person',
+            datasets: datasetNames,
+            vehicleDatasets: realtimeCache.vehicleDatasets || []
+          };
+          console.log('📡 [CONTROLS] Using Real-time Monitoring cache');
+        }
+
+        if (!activeCache) {
+          alert('Nejprve načtěte datasety v Sidebar pomocí tlačítka "Načíst"');
+          return;
+        }
+
+        // Set global cache reference for backward compatibility
+        window.sshrDatasetCache = activeCache;
+
+        if (window.SSHRParallel) {
+          if (window.SSHRParallel.isActive()) {
+            // Already running - resume if paused
+            window.SSHRParallel.resumeSession();
+          } else if (window.SSHRParallel.getActiveTracks().length > 0) {
+            // Has tracks but paused - resume
+            window.SSHRParallel.resumeSession();
+          } else {
+            // Start new session from cache
+            if (sshrPlaybackSpeed === 0) {
+              // First RUN click: set to 1x speed
+              sshrSpeedIdx = 0;
+              sshrPlaybackSpeed = sshrSpeeds[sshrSpeedIdx];
+              updateSSHRSpeedDisplay();
+            }
+
+            console.log('🚀 [SSHR-CONTROLS] Starting animation from cache:', window.sshrDatasetCache);
+
+            // Use cached datasets based on mode
+            if (window.sshrDatasetCache.mode === 'single') {
+              window.SSHRParallel.startSession(window.sshrDatasetCache.datasets, { mode: 'single' });
+            } else if (window.sshrDatasetCache.mode === 'parallel' || window.sshrDatasetCache.mode === 'parallel-person') {
+              // Both forensic parallel and real-time parallel use same animation mode
+              window.SSHRParallel.startSession(window.sshrDatasetCache.datasets, { mode: 'parallel' });
+            } else if (window.sshrDatasetCache.mode === 'parallel-extra') {
+              window.SSHRParallel.startSession(window.sshrDatasetCache.datasets, {
+                mode: 'parallel-extra',
+                vehicles: window.sshrDatasetCache.vehicleDatasets
+              });
+            }
+
+            // Apply speed if not default
+            if (sshrPlaybackSpeed > 0) {
+              window.SSHRParallel.setSpeed(sshrPlaybackSpeed);
+            }
+          }
+        }
+
+        sshrAnimationActive = true;
+      });
+
+      // PAUSE Button
+      document.getElementById('sshr-pauseBtn')?.addEventListener('click', () => {
+        console.log('⏸️ [SSHR-CONTROLS] PAUSE button clicked');
+        sshrAnimationActive = false;
+        if (window.SSHRParallel && window.SSHRParallel.pauseSession) {
+          window.SSHRParallel.pauseSession();
+        }
+      });
+
+      // STOP Button
+      document.getElementById('sshr-stopBtn')?.addEventListener('click', () => {
+        console.log('⏹️ [SSHR-CONTROLS] STOP button clicked');
+        sshrAnimationActive = false;
+        sshrPlaybackSpeed = 0;
+        sshrSpeedIdx = 0;
+        updateSSHRSpeedDisplay();
+        if (window.SSHRParallel && window.SSHRParallel.stopSession) {
+          window.SSHRParallel.stopSession({ reason: 'manual' });
+        }
+      });
+
+      // FASTER Button (1x → 3x → 5x → 10x → 20x)
+      document.getElementById('sshr-fasterBtn')?.addEventListener('click', () => {
+        console.log('⬆️ [SSHR-CONTROLS] FASTER button clicked');
+        if (sshrPlaybackSpeed === 0) {
+          // Start at 1x if stopped
+          sshrSpeedIdx = 0;
+          sshrPlaybackSpeed = sshrSpeeds[sshrSpeedIdx];
+          sshrAnimationActive = true;
+
+          // Auto-start session if not running
+          if (window.SSHRParallel && !window.SSHRParallel.isActive()) {
+            // Check cache availability (already validated above)
+            if (!window.sshrDatasetCache) {
+              alert('Nejprve načtěte datasety v Sidebar pomocí tlačítka "Načíst"');
+              return;
+            }
+
+            // Convert real-time cache if needed
+            const forensicCache = window.forensicAnalysisCache;
+            const realtimeCache = window.realtimeMonitoringCache;
+
+            if (realtimeCache && realtimeCache.datasets && Object.keys(realtimeCache.datasets).length > 0) {
+              const datasetNames = Object.keys(realtimeCache.datasets);
+              window.sshrDatasetCache = {
+                mode: 'parallel-person',
+                datasets: datasetNames,
+                vehicleDatasets: realtimeCache.vehicleDatasets || []
+              };
+            }
+            const datasets = window.sshrDatasetCache.datasets;
+            if (datasets.length > 0) {
+              if (window.sshrDatasetCache.mode === 'single') {
+                window.SSHRParallel.startSession(datasets, { mode: 'single' });
+              } else if (window.sshrDatasetCache.mode === 'parallel' || window.sshrDatasetCache.mode === 'parallel-person') {
+                // Both forensic parallel and real-time parallel use same animation mode
+                window.SSHRParallel.startSession(datasets, { mode: 'parallel' });
+              } else if (window.sshrDatasetCache.mode === 'parallel-extra') {
+                window.SSHRParallel.startSession(datasets, {
+                  mode: 'parallel-extra',
+                  vehicles: window.sshrDatasetCache.vehicleDatasets
+                });
+              }
+            }
+          }
+        } else {
+          // Increase speed
+          sshrSpeedIdx = Math.min(sshrSpeeds.length - 1, sshrSpeedIdx + 1);
+          sshrPlaybackSpeed = sshrSpeeds[sshrSpeedIdx];
+        }
+        updateSSHRSpeedDisplay();
+
+        // Update parallel engine speed
+        if (window.SSHRParallel && sshrPlaybackSpeed > 0) {
+          window.SSHRParallel.setSpeed(sshrPlaybackSpeed);
+        }
+      });
+
+      // SLOWER Button (20x → 10x → 5x → 3x → 1x)
+      document.getElementById('sshr-slowerBtn')?.addEventListener('click', () => {
+        console.log('⬇️ [SSHR-CONTROLS] SLOWER button clicked');
+        if (sshrPlaybackSpeed > 0) {
+          sshrSpeedIdx = Math.max(0, sshrSpeedIdx - 1);
+          sshrPlaybackSpeed = sshrSpeeds[sshrSpeedIdx];
+          updateSSHRSpeedDisplay();
+
+          // Update parallel engine speed
+          if (window.SSHRParallel && sshrPlaybackSpeed > 0) {
+            window.SSHRParallel.setSpeed(sshrPlaybackSpeed);
+          }
+        }
+      });
+
+      // Fullscreen functionality
+      const mapContainer = document.querySelector('.card');
+      const mapDiv = document.getElementById('leafletMap');
+      const fullscreenBtn = document.getElementById('sshr-map-fullscreen-btn');
+
+      let isSSHRFullscreen = false;
+      const originalStyles = {};
+
+      function toggleSSHRFullscreen() {
+        if (!isSSHRFullscreen) {
+          // Save original styles
+          originalStyles.position = mapContainer.style.position;
+          originalStyles.top = mapContainer.style.top;
+          originalStyles.left = mapContainer.style.left;
+          originalStyles.width = mapContainer.style.width;
+          originalStyles.height = mapContainer.style.height;
+          originalStyles.zIndex = mapContainer.style.zIndex;
+          originalStyles.margin = mapContainer.style.margin;
+
+          // Enter fullscreen
+          Object.assign(mapContainer.style, {
+            position: 'fixed',
+            top: '0',
+            left: '0',
+            width: '100vw',
+            height: '100vh',
+            zIndex: '3000',
+            margin: '0'
+          });
+
+          if (mapDiv) {
+            mapDiv.style.height = '100%';
+          }
+
+          if (fullscreenBtn) {
+            fullscreenBtn.innerHTML = '<svg style="width:18px; height:18px; color:#333;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/></svg>';
+          }
+
+          isSSHRFullscreen = true;
+          console.log('🔍 [SSHR-FULLSCREEN] Entered fullscreen mode');
+        } else {
+          // Exit fullscreen
+          Object.assign(mapContainer.style, originalStyles);
+
+          if (mapDiv) {
+            mapDiv.style.height = '100%';
+          }
+
+          if (fullscreenBtn) {
+            fullscreenBtn.innerHTML = '<svg style="width:18px; height:18px; color:#333;" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/></svg>';
+          }
+
+          isSSHRFullscreen = false;
+          console.log('🔍 [SSHR-FULLSCREEN] Exited fullscreen mode');
+        }
+
+        // Invalidate map size after transition
+        setTimeout(() => {
+          if (window.leafletMap && window.leafletMap.invalidateSize) {
+            window.leafletMap.invalidateSize();
+          }
+        }, 300);
+      }
+
+      fullscreenBtn?.addEventListener('click', toggleSSHRFullscreen);
+
+      // Dataset selection is now managed through cache system (window.sshrDatasetCache)
+
+      // Initialize speed display
+      updateSSHRSpeedDisplay();
+
+      // Animation Layers dropdown functionality
+      initializeAnimationLayersDropdown();
+
+      console.log('✅ [SSHR-CONTROLS] Control panels initialized');
+    });
+
+    // Animation Layers Dropdown Management
+    function initializeAnimationLayersDropdown() {
+      const anchorRadios = document.querySelectorAll('input[name="anchor-layer"]');
+      const polygonCheckboxes = document.querySelectorAll('input[name="polygon-layer"]');
+      const trajectoryStyleRadios = document.querySelectorAll('input[name="trajectory-style"]');
+      window.sshrLayerPreferences = window.sshrLayerPreferences || {
+        trajectoryStyle: 'solid'
+      };
+
+      // Update visual indicators for radio buttons (anchors)
+      function updateAnchorRadios() {
+        anchorRadios.forEach((radio) => {
+          const indicator = radio.parentElement.querySelector('span span');
+          if (radio.checked) {
+            indicator.classList.remove('hidden');
+          } else {
+            indicator.classList.add('hidden');
+          }
+        });
+      }
+
+      // Update visual indicators for checkboxes (polygons)
+      function updatePolygonCheckboxes() {
+        polygonCheckboxes.forEach((checkbox) => {
+          const checkmark = checkbox.parentElement.querySelector('svg');
+          if (checkbox.checked) {
+            checkmark.classList.remove('hidden');
+          } else {
+            checkmark.classList.add('hidden');
+          }
+        });
+      }
+
+      function updateTrajectoryStyleRadios() {
+        trajectoryStyleRadios.forEach((radio) => {
+          const indicator = radio.parentElement.querySelector('span > span');
+          if (indicator) {
+            if (radio.checked) {
+              indicator.classList.remove('hidden');
+            } else {
+              indicator.classList.add('hidden');
+            }
+          }
+        });
+      }
+
+      function applyTrajectoryStyle(style) {
+        window.sshrLayerPreferences.trajectoryStyle = style;
+        if (window.SSHR?.trajectoryLayerManager?.setLineStyle) {
+          window.SSHR.trajectoryLayerManager.setLineStyle(style);
+        } else if (typeof window.applySSHRTrajectoryStyle === 'function') {
+          window.applySSHRTrajectoryStyle(style);
+        } else {
+          console.log(`ℹ️ [TRAJECTORY-LAYERS] Trajectory layer not ready yet (style ${style})`);
+        }
+      }
+
+      // Event handlers for anchor radio buttons
+      anchorRadios.forEach((radio) => {
+        radio.addEventListener('change', function() {
+          if (this.checked) {
+            updateAnchorRadios();
+            handleLayerChange();
+          }
+        });
+      });
+
+      // Event handlers for polygon checkboxes
+      polygonCheckboxes.forEach((checkbox) => {
+        checkbox.addEventListener('change', function() {
+          updatePolygonCheckboxes();
+          handleLayerChange();
+        });
+      });
+
+      trajectoryStyleRadios.forEach((radio) => {
+        radio.addEventListener('change', function() {
+          if (this.checked) {
+            updateTrajectoryStyleRadios();
+            applyTrajectoryStyle(this.value);
+          }
+        });
+      });
+
+      // Click handlers for all labels (better UX)
+      document.querySelectorAll('#layers-panel-content label').forEach((label) => {
+        label.addEventListener('click', function(e) {
+          e.preventDefault();
+          const input = this.querySelector('input');
+          if (input) {
+          if (input.type === 'radio') {
+            input.checked = true;
+            if (input.name === 'anchor-layer') {
+              updateAnchorRadios();
+            } else if (input.name === 'trajectory-style') {
+              updateTrajectoryStyleRadios();
+              applyTrajectoryStyle(input.value);
+            }
+          } else if (input.type === 'checkbox') {
+            input.checked = !input.checked;
+            updatePolygonCheckboxes();
+          }
+          handleLayerChange();
+          }
+        });
+      });
+
+      // Initialize default states
+      updateAnchorRadios();
+      updatePolygonCheckboxes();
+      updateTrajectoryStyleRadios();
+
+      // Explicitly ensure default state: "Bez kotev" + no polygons checked
+      const bezKotevRadio = document.querySelector('input[name="anchor-layer"][value="bez-kotev"]');
+      if (bezKotevRadio && !bezKotevRadio.checked) {
+        bezKotevRadio.checked = true;
+        updateAnchorRadios();
+      }
+
+      // Ensure no polygon checkboxes are checked by default
+      polygonCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          checkbox.checked = false;
+          console.log(`🔄 [SSHR-LAYERS] Unchecked default polygon: ${checkbox.value}`);
+        }
+      });
+      updatePolygonCheckboxes();
+
+      const preferredStyle = window.sshrLayerPreferences.trajectoryStyle || 'solid';
+      const preferredRadio = document.querySelector(`input[name="trajectory-style"][value="${preferredStyle}"]`);
+      if (preferredRadio) {
+        preferredRadio.checked = true;
+        updateTrajectoryStyleRadios();
+        applyTrajectoryStyle(preferredStyle);
+      } else {
+        applyTrajectoryStyle('solid');
+      }
+
+      // Apply default layer state
+      handleLayerChange();
+
+      console.log('✅ [SSHR-LAYERS] Animation layers dropdown initialized with default state (Bez kotev, no polygons)');
+    }
+
+    // Handle layer changes with new combination logic
+    function handleLayerChange() {
+      const selectedAnchor = document.querySelector('input[name="anchor-layer"]:checked')?.value || 'bez-kotev';
+      const selectedPolygons = Array.from(document.querySelectorAll('input[name="polygon-layer"]:checked')).map(cb => cb.value);
+      const trajectoryStyle = window.sshrLayerPreferences?.trajectoryStyle || 'solid';
+
+      console.log('🎭 [SSHR-LAYERS] ============ Layer state changed ============');
+      console.log('  → Anchor layer:', selectedAnchor);
+      console.log('  → Polygon layers:', selectedPolygons);
+      console.log('  → INFRA Elements selected:', selectedPolygons.includes('infra-elements'));
+      console.log('  → Trajectory style preference:', trajectoryStyle);
+
+      // Apply anchor layer visibility
+      handleAnchorLayerVisibility(selectedAnchor);
+
+      // Apply polygon layer visibility
+      console.log('🎭 [SSHR-LAYERS] Calling handlePolygonLayerVisibility with:', selectedPolygons);
+      handlePolygonLayerVisibility(selectedPolygons);
+    }
+
+    // Wave Effect Animation for Layer Transitions
+    function triggerWaveEffect(layerType, callback) {
+      const mapContainer = document.getElementById('leafletMap');
+      if (!mapContainer) {
+        console.warn('⚠️ [WAVE-EFFECT] Map container not found');
+        if (callback) callback();
+        return;
+      }
+
+      // Determine wave color based on layer type
+      let waveClass = 'wave-anchor'; // default
+      if (layerType.includes('green')) {
+        waveClass = 'wave-green';
+      } else if (layerType.includes('red')) {
+        waveClass = 'wave-red';
+      } else if (layerType.includes('infra')) {
+        waveClass = 'wave-infra';
+      } else if (layerType.includes('trajectory')) {
+        waveClass = 'wave-trajectory';
+      } else if (layerType.includes('grouping')) {
+        waveClass = 'wave-grouping';
+      }
+
+      // Create wave overlay
+      const overlay = document.createElement('div');
+      overlay.className = `layer-transition-overlay ${waveClass} wave-animation`;
+
+      // Position overlay over map
+      const mapRect = mapContainer.getBoundingClientRect();
+      overlay.style.position = 'absolute';
+      overlay.style.top = '0';
+      overlay.style.left = '0';
+      overlay.style.width = '100%';
+      overlay.style.height = '100%';
+
+      mapContainer.style.position = 'relative';
+      mapContainer.appendChild(overlay);
+
+      console.log(`🌊 [WAVE-EFFECT] Triggering ${waveClass} wave for layer: ${layerType}`);
+
+      // Execute callback during wave animation (at 50% completion)
+      setTimeout(() => {
+        if (callback) callback();
+      }, 600); // 50% of 1.2s animation
+
+      // Remove overlay after animation completes
+      setTimeout(() => {
+        if (overlay && overlay.parentNode) {
+          overlay.remove();
+        }
+      }, 1200);
+    }
+
+    // Reset map to default state - only FENCE perimeter polyline visible
+    function resetMapToDefaultState() {
+      console.log('🔄 [MAP-RESET] Resetting map to default FENCE-only state...');
+
+      // Reset all polygon layers to unchecked state
+      const polygonCheckboxes = document.querySelectorAll('input[name="polygon-layer"]');
+      polygonCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          checkbox.checked = false;
+          // Update visual indicator
+          const indicator = checkbox.parentNode.querySelector('svg');
+          if (indicator) {
+            indicator.classList.add('hidden');
+          }
+        }
+      });
+
+      // Trigger polygon layer visibility update to hide all layers except FENCE
+      handlePolygonLayerVisibility([]);
+
+      console.log('✅ [MAP-RESET] Map reset to default state - only FENCE visible');
+    }
+
+    // Activate corona flash effect for all visible anchors
+    function activateCoronaEffectForAllAnchors() {
+      console.log('✨ [CORONA-EFFECT] Activating corona flash for all visible anchors...');
+
+      if (!window.SSHR || !window.SSHR.anchorLayers) {
+        console.warn('⚠️ [CORONA-EFFECT] Anchor layers not available');
+        return;
+      }
+
+      // Add slight delay to ensure anchors are fully loaded
+      setTimeout(() => {
+        const anchorLayers = window.SSHR.anchorLayers;
+        let activatedCount = 0;
+
+        anchorLayers.eachLayer((layer) => {
+          if (layer.anchorId && layer.getElement) {
+            const element = layer.getElement();
+            if (element) {
+              // Apply amber corona effect
+              element.style.boxShadow = '0 0 20px 8px #f59e0b';
+              element.style.borderRadius = '50%';
+              element.style.transition = 'box-shadow 0.3s ease';
+              activatedCount++;
+            }
+          }
+        });
+
+        console.log(`✨ [CORONA-EFFECT] Corona flash activated for ${activatedCount} anchors`);
+      }, 300);
+    }
+
+    // Handle anchor layer visibility (mutually exclusive)
+    function handleAnchorLayerVisibility(anchorLayer) {
+      if (!window.sshrLayers) {
+        console.warn('⚠️ [SSHR-LAYERS] sshrLayers not available yet');
+        return;
+      }
+
+      // Trigger wave effect before applying changes
+      triggerWaveEffect(`anchor-${anchorLayer}`, () => {
+        const anchorLayerGroup = window.sshrLayers.get('anchors');
+
+        switch (anchorLayer) {
+        case 'bez-kotev':
+          console.log('  → Hiding all anchors');
+          if (anchorLayerGroup && window.leafletMap.hasLayer(anchorLayerGroup)) {
+            window.leafletMap.removeLayer(anchorLayerGroup);
+          }
+          // Also hide tooltips by setting a global flag
+          window.sshrShowTooltips = false;
+          hideAllAnchorTooltips();
+
+          // Deactivate all corona flash effects when returning to 'Bez kotev'
+          if (window.SSHRParallel && window.SSHRParallel.personTracker) {
+            window.SSHRParallel.personTracker.deactivateAllAnchorCoronas();
+            console.log('🌑 [SSHR-LAYERS] All corona effects deactivated (Bez kotev mode)');
+          }
+
+          break;
+
+        case 's-kotvami-bez-cisel':
+          console.log('  → Showing anchors without ID numbers');
+          // Load anchors on-demand if not already loaded
+          if (anchorLayerGroup && anchorLayerGroup.getLayers().length === 0) {
+            console.log('  → Loading anchors on-demand...');
+            if (window.SSHR && typeof window.SSHR.loadAnchors === 'function') {
+              window.SSHR.loadAnchors();
+            }
+          }
+          if (anchorLayerGroup && !window.leafletMap.hasLayer(anchorLayerGroup)) {
+            window.leafletMap.addLayer(anchorLayerGroup);
+          }
+          // Hide tooltips
+          window.sshrShowTooltips = false;
+          hideAllAnchorTooltips();
+
+          // Activate corona flash effect for all visible anchors
+          activateCoronaEffectForAllAnchors();
+          break;
+
+        case 's-id-kotev':
+          console.log('  → Showing anchors with ID numbers');
+          // Load anchors on-demand if not already loaded
+          if (anchorLayerGroup && anchorLayerGroup.getLayers().length === 0) {
+            console.log('  → Loading anchors on-demand...');
+            if (window.SSHR && typeof window.SSHR.loadAnchors === 'function') {
+              window.SSHR.loadAnchors();
+            }
+          }
+          if (anchorLayerGroup && !window.leafletMap.hasLayer(anchorLayerGroup)) {
+            window.leafletMap.addLayer(anchorLayerGroup);
+          }
+          // Show tooltips
+          window.sshrShowTooltips = true;
+          showAllAnchorTooltips();
+
+          // Activate corona flash effect for all visible anchors
+          activateCoronaEffectForAllAnchors();
+          break;
+
+        default:
+          console.log('  → Unknown anchor layer:', anchorLayer);
+        }
+      }); // End of wave effect callback
+    }
+
+    // Handle polygon layer visibility (can be combined)
+    function handlePolygonLayerVisibility(polygonLayers) {
+      console.log('🔧 [POLYGON-LAYERS] ========== handlePolygonLayerVisibility START ==========');
+      console.log('🔧 [POLYGON-LAYERS] Input polygonLayers:', polygonLayers);
+      console.log('🔧 [POLYGON-LAYERS] INFRA included:', polygonLayers.includes('infra-elements'));
+      const wantsTrajectories = polygonLayers.includes('person-trajectories');
+      const wantsPersonalGrouping = polygonLayers.includes('personal-grouping');
+
+      if (!window.sshrLayers) {
+        console.warn('⚠️ [SSHR-LAYERS] sshrLayers not available yet');
+        return;
+      }
+
+      console.log('🎭 [SSHR-LAYERS] Processing polygon layers:', polygonLayers);
+
+      // Determine wave effect type based on selected layers
+      let waveType = 'polygon-default';
+      if (polygonLayers.includes('green-polylines') || polygonLayers.includes('green-polygons')) {
+        waveType = 'polygon-green';
+      } else if (polygonLayers.includes('red-polylines') || polygonLayers.includes('red-polygons')) {
+        waveType = 'polygon-red';
+      } else if (polygonLayers.includes('infra-elements')) {
+        waveType = 'polygon-infra';
+      } else if (wantsTrajectories) {
+        waveType = 'polygon-trajectory';
+      } else if (wantsPersonalGrouping) {
+        waveType = 'polygon-grouping';
+      }
+
+      // Trigger wave effect before applying changes
+      triggerWaveEffect(waveType, () => {
+
+      const zonesLayer = window.sshrLayers.get('zones');
+      const polygonsLayer = window.sshrLayers.get('polygons');
+
+      // If no polygon layers selected, ensure ALL layers are removed (return to default - only fence)
+      if (polygonLayers.length === 0) {
+        console.log('  → No polygon layers selected - returning to default state (only fence)');
+
+        // Remove all specific polygon layer types
+        if (window.SSHR && window.SSHR.zones) {
+          console.log('  → Removing green-polylines...');
+          window.SSHR.zones.removeLayerType('green-polylines');
+          console.log('  → Removing green-polygons...');
+          window.SSHR.zones.removeLayerType('green-polygons');
+          console.log('  → Removing red-polylines...');
+          window.SSHR.zones.removeLayerType('red-polylines');
+          console.log('  → Removing red-polygons...');
+          window.SSHR.zones.removeLayerType('red-polygons');
+        }
+
+        // Also remove old zone layers if present
+        if (zonesLayer && window.leafletMap.hasLayer(zonesLayer)) {
+          console.log('  → Removing old zones layer...');
+          window.leafletMap.removeLayer(zonesLayer);
+        }
+        if (polygonsLayer && window.leafletMap.hasLayer(polygonsLayer)) {
+          console.log('  → Removing old polygons layer...');
+          window.leafletMap.removeLayer(polygonsLayer);
+        }
+
+        // Verify fence is still present
+        if (window.SSHR && window.SSHR.zones && window.SSHR.zones.polygonLayers) {
+          const fence = window.SSHR.zones.polygonLayers.get('fence');
+          if (fence && window.leafletMap.hasLayer(fence)) {
+            console.log('  → ✓ Fence perimeter confirmed present');
+          } else {
+            console.warn('  → ⚠️ Fence perimeter missing - reloading...');
+            // Reload fence if missing
+            if (window.SSHR.zones.loadPerimeterFence) {
+              window.SSHR.zones.loadPerimeterFence();
+            }
+          }
+        }
+
+        if (window.SSHR?.trajectoryLayerManager?.hideLayer) {
+          window.SSHR.trajectoryLayerManager.hideLayer();
+        }
+        if (window.SSHR?.personalGroupingLayer?.setVisible) {
+          window.SSHR.personalGroupingLayer.setVisible(false);
+        }
+
+        console.log('✅ [SSHR-LAYERS] Returned to default state - only fence visible');
+        return;
+      }
+
+      // Check if any zones need to be loaded
+      const needsGreenZones = polygonLayers.includes('green-polylines') || polygonLayers.includes('green-polygons');
+      const needsRedZones = polygonLayers.includes('red-polylines') || polygonLayers.includes('red-polygons');
+      const needsAnyZones = needsGreenZones || needsRedZones;
+
+      // Note: We no longer use loadInternalZones() as we access SSHR_ZONES data directly
+      // This prevents interference with the old zones layer system
+
+      // Load zones data for rendering
+      let greenZones = [];
+      let redZones = [];
+      if (needsAnyZones && window.SSHR_ZONES) {
+        greenZones = window.SSHR_ZONES.greens || [];
+        redZones = window.SSHR_ZONES.reds || [];
+
+        // Debug: Log zone data source information
+        console.log('🔍 [ANIMATION-DEBUG] Zone data loaded for animation layers:');
+        console.log(`  → GREEN zones count: ${greenZones.length}`);
+        console.log(`  → RED zones count: ${redZones.length}`);
+        console.log(`  → Data source: ${window.SSHR_ZONES.source || 'unknown'}`);
+        console.log(`  → Last updated: ${window.SSHR_ZONES.lastUpdated || 'unknown'}`);
+
+        if (greenZones.length > 0) {
+          console.log('🟢 [ANIMATION-DEBUG] GREEN zones details:');
+          greenZones.forEach((zone, index) => {
+            console.log(`    Zone ${index + 1}: ${zone.name || zone.id} (${zone.coordinates?.length || 0} points)`);
+          });
+        }
+      } else {
+        console.log('⚠️ [ANIMATION-DEBUG] No zones loaded for animation - needsAnyZones:', needsAnyZones, 'window.SSHR_ZONES exists:', !!window.SSHR_ZONES);
+      }
+
+      // Handle GREEN Polylines
+      if (polygonLayers.includes('green-polylines')) {
+        console.log('  → Showing GREEN polylines (zone borders only)');
+        if (window.SSHR && window.SSHR.zones && greenZones.length > 0) {
+          window.SSHR.zones.addZonePolylines(greenZones, 'green');
+        }
+      } else {
+        // Remove GREEN polylines if not selected
+        if (window.SSHR && window.SSHR.zones) {
+          window.SSHR.zones.removeLayerType('green-polylines');
+        }
+      }
+
+      // Handle GREEN Polygons
+      if (polygonLayers.includes('green-polygons')) {
+        console.log('  → Showing GREEN polygons (filled zones)');
+        if (window.SSHR && window.SSHR.zones && greenZones.length > 0) {
+          window.SSHR.zones.addZonePolygons(greenZones, 'green');
+        }
+      } else {
+        // Remove GREEN polygons if not selected
+        if (window.SSHR && window.SSHR.zones) {
+          window.SSHR.zones.removeLayerType('green-polygons');
+        }
+      }
+
+      // Handle RED Polylines
+      if (polygonLayers.includes('red-polylines')) {
+        console.log('  → Showing RED polylines (zone borders only)');
+        if (window.SSHR && window.SSHR.zones && redZones.length > 0) {
+          window.SSHR.zones.addZonePolylines(redZones, 'red');
+        }
+      } else {
+        // Remove RED polylines if not selected
+        if (window.SSHR && window.SSHR.zones) {
+          window.SSHR.zones.removeLayerType('red-polylines');
+        }
+      }
+
+      // Handle RED Polygons
+      if (polygonLayers.includes('red-polygons')) {
+        console.log('  → Showing RED polygons (filled zones)');
+        if (window.SSHR && window.SSHR.zones && redZones.length > 0) {
+          window.SSHR.zones.addZonePolygons(redZones, 'red');
+        }
+      } else {
+        // Remove RED polygons if not selected
+        if (window.SSHR && window.SSHR.zones) {
+          window.SSHR.zones.removeLayerType('red-polygons');
+        }
+      }
+
+      // Note: Each layer type (polylines/polygons) is managed independently above
+      // No need for global zones layer management since we use specific layer groups
+
+      // Handle TRAJECTORY overlay visibility
+      if (wantsTrajectories) {
+        const stylePref = window.sshrLayerPreferences?.trajectoryStyle || 'solid';
+        if (window.SSHR?.trajectoryLayerManager?.showLayer) {
+          window.SSHR.trajectoryLayerManager.showLayer(stylePref);
+        } else {
+          console.warn('⚠️ [TRAJECTORY-LAYERS] Manager not ready - cannot render trajectories');
+        }
+      } else if (window.SSHR?.trajectoryLayerManager?.hideLayer) {
+        window.SSHR.trajectoryLayerManager.hideLayer();
+      }
+
+      // Handle personal grouping overlay
+      if (window.SSHR?.personalGroupingLayer?.setVisible) {
+        window.SSHR.personalGroupingLayer.setVisible(wantsPersonalGrouping);
+      } else if (wantsPersonalGrouping) {
+        console.warn('⚠️ [PERSONAL-GROUPING] Layer manager not initialised');
+      }
+
+      }); // End of wave effect callback
+
+      // Handle INFRA elements visibility INDEPENDENTLY (outside wave effect)
+      console.log('🏗️ [INFRA-INDEPENDENT] Handling INFRA elements independently...');
+      if (polygonLayers.includes('infra-elements')) {
+        console.log('🏗️ [INFRA-SHOW] INFRA elements requested - loading infrastructure');
+
+        // Load INFRA elements if not already loaded
+        if (!window.sshrInfraElements || window.sshrInfraElements.size === 0) {
+          if (window.loadSSHRInfraElements) {
+            window.loadSSHRInfraElements();
+            // Add to map immediately after loading
+            setTimeout(() => {
+              const infraLayer = window.sshrLayers?.get('infra-elements');
+              if (infraLayer && window.leafletMap) {
+                infraLayer.addTo(window.leafletMap);
+                console.log('🏗️ [INFRA-SHOW] INFRA elements layer loaded and shown');
+              }
+            }, 100);
+          } else {
+            console.warn('🏗️ [INFRA-SHOW] loadSSHRInfraElements function not available');
+          }
+        } else {
+          // Show existing INFRA layer
+          const infraLayer = window.sshrLayers?.get('infra-elements');
+          if (infraLayer && window.leafletMap) {
+            if (!window.leafletMap.hasLayer(infraLayer)) {
+              infraLayer.addTo(window.leafletMap);
+              console.log('🏗️ [INFRA-SHOW] INFRA elements layer shown');
+            } else {
+              console.log('🏗️ [INFRA-SHOW] INFRA elements layer already visible');
+            }
+          }
+        }
+      } else {
+        // Hide INFRA elements if not selected
+        console.log('🔴 [INFRA-HIDE] INFRA elements not selected - hiding layer');
+        const infraLayer = window.sshrLayers?.get('infra-elements');
+
+        if (infraLayer) {
+          // Debug info
+          console.log(`🔴 [INFRA-HIDE] INFRA layer found with ${infraLayer.getLayers ? infraLayer.getLayers().length : 'unknown'} sublayers`);
+
+          // Force removal - try multiple methods
+          if (window.leafletMap) {
+            if (window.leafletMap.hasLayer(infraLayer)) {
+              window.leafletMap.removeLayer(infraLayer);
+              console.log('🔴 [INFRA-HIDE] INFRA layer removed from map');
+            }
+
+            // Also try to remove each individual marker
+            if (infraLayer.getLayers) {
+              infraLayer.getLayers().forEach(marker => {
+                if (window.leafletMap.hasLayer(marker)) {
+                  window.leafletMap.removeLayer(marker);
+                  console.log('🔴 [INFRA-HIDE] Individual INFRA marker removed');
+                }
+              });
+            }
+
+            // Clear the layer group completely
+            if (infraLayer.clearLayers) {
+              infraLayer.clearLayers();
+              console.log('🔴 [INFRA-HIDE] INFRA layer cleared');
+            }
+          }
+
+          // Double-check removal with aggressive cleanup
+          setTimeout(() => {
+            if (window.leafletMap && window.leafletMap.hasLayer(infraLayer)) {
+              console.warn('🔴 [INFRA-HIDE] ⚠️ INFRA layer still on map - force removing again!');
+              try {
+                window.leafletMap.removeLayer(infraLayer);
+                if (infraLayer.clearLayers) infraLayer.clearLayers();
+              } catch (e) {
+                console.error('🔴 [INFRA-HIDE] Error in force removal:', e);
+              }
+            } else {
+              console.log('🔴 [INFRA-HIDE] ✅ INFRA layer successfully removed');
+            }
+
+            // Also check for any remaining .infra-element-marker elements in DOM
+            const remainingMarkers = document.querySelectorAll('.infra-element-marker');
+            if (remainingMarkers.length > 0) {
+              console.warn(`🔴 [INFRA-HIDE] Found ${remainingMarkers.length} remaining INFRA markers in DOM`);
+              remainingMarkers.forEach(marker => {
+                const parent = marker.closest('.leaflet-marker-pane');
+                if (parent) {
+                  marker.parentElement?.remove();
+                  console.log('🔴 [INFRA-HIDE] Manually removed DOM marker');
+                }
+              });
+            }
+          }, 200);
+        } else {
+          console.log('🔴 [INFRA-HIDE] INFRA elements layer not found in sshrLayers');
+        }
+      }
+    }
+
+    // Helper functions for tooltip management
+    function hideAllAnchorTooltips() {
+      const anchorLayer = window.sshrLayers?.get('anchors');
+      if (anchorLayer) {
+        anchorLayer.eachLayer((marker) => {
+          if (marker.getTooltip()) {
+            marker.closeTooltip();
+            marker._tooltipVisible = false;
+          }
+        });
+      }
+    }
+
+    function showAllAnchorTooltips() {
+      const anchorLayer = window.sshrLayers?.get('anchors');
+      if (anchorLayer) {
+        anchorLayer.eachLayer((marker) => {
+          if (marker.getTooltip()) {
+            marker.openTooltip();
+            marker._tooltipVisible = true;
+          }
+        });
+      }
+    }
+
+    // ===== PERSON SELECTION FUNCTIONALITY =====
+
+    // Initialize person selection functionality
+    function initPersonSelection() {
+      const trackingModeSelect = document.getElementById('tracking-mode-select');
+      const personContainer = document.getElementById('person-selection-container');
+
+      if (trackingModeSelect && personContainer) {
+        // Handle tracking mode change
+        trackingModeSelect.addEventListener('change', function() {
+          const selectedMode = this.value;
+
+          if (selectedMode === 'parallel' || selectedMode === 'parallel-extra') {
+            // Show person selection for parallel modes
+            personContainer.style.display = 'block';
+            generatePersonButtons();
+          } else {
+            // Hide person selection for single mode
+            personContainer.style.display = 'none';
+          }
+        });
+
+        // Initial setup based on current value
+        if (trackingModeSelect.value === 'parallel' || trackingModeSelect.value === 'parallel-extra') {
+          personContainer.style.display = 'block';
+          generatePersonButtons();
+        }
+      }
+    }
+
+    // Generate person selection buttons (1-9 + 10+)
+    function generatePersonButtons() {
+      const grid = document.getElementById('person-buttons-grid');
+      if (!grid) return;
+
+      grid.innerHTML = ''; // Clear existing buttons
+
+      // Create buttons 1-9
+      for (let i = 1; i <= 9; i++) {
+        const button = createPersonButton(i, false);
+        grid.appendChild(button);
+      }
+
+      // Create 10+ expand button
+      const expandButton = createPersonButton('10+', true);
+      grid.appendChild(expandButton);
+    }
+
+    // Create individual person button
+    function createPersonButton(number, isExpandButton = false) {
+      const button = document.createElement('button');
+      button.className = 'person-select-btn' + (isExpandButton ? ' expand-btn' : '');
+      button.textContent = number;
+      button.type = 'button';
+
+      if (isExpandButton) {
+        button.onclick = () => toggleExtendedButtons();
+      } else {
+        button.onclick = () => selectPersonCount(number);
+      }
+
+      return button;
+    }
+
+    // Toggle extended buttons (10, 11, 12, 13...)
+    function toggleExtendedButtons() {
+      const extendedContainer = document.getElementById('extended-person-buttons');
+      if (!extendedContainer) return;
+
+      const isVisible = extendedContainer.style.display !== 'none';
+
+      if (isVisible) {
+        // Hide extended buttons
+        extendedContainer.style.display = 'none';
+        extendedContainer.innerHTML = '';
+      } else {
+        // Show extended buttons
+        extendedContainer.style.display = 'grid';
+        generateExtendedButtons();
+      }
+    }
+
+    // Generate extended buttons (10, 11, 12, 13...)
+    function generateExtendedButtons() {
+      const container = document.getElementById('extended-person-buttons');
+      if (!container) return;
+
+      container.innerHTML = ''; // Clear existing
+
+      // Create buttons 10-20 (můžete upravit rozsah podle potřeby)
+      for (let i = 10; i <= 20; i++) {
+        const button = createPersonButton(i, false);
+        container.appendChild(button);
+      }
+    }
+
+    // Global dataset tracking
+    window.activePersonDatasets = new Set();
+
+    // Handle person dataset selection (toggle activation)
+    function selectPersonCount(count) {
+      const button = event.target;
+      const datasetName = `SSHR_DATA${count}`;
+
+      // Toggle dataset activation
+      if (window.activePersonDatasets.has(count)) {
+        // Deactivate dataset
+        window.activePersonDatasets.delete(count);
+        button.classList.remove('active');
+        console.log(`Deactivated dataset: ${datasetName}`);
+      } else {
+        // Activate dataset
+        window.activePersonDatasets.add(count);
+        button.classList.add('active');
+        console.log(`Activated dataset: ${datasetName}`);
+      }
+
+      // Update load/clear buttons state
+      updateParallelControlButtons();
+    }
+
+    // Update state of Načíst/Vyčistit buttons
+    function updateParallelControlButtons() {
+      const loadBtn = document.getElementById('parallel-person-load-btn');
+      const clearBtn = document.getElementById('parallel-person-clear-btn');
+
+      if (loadBtn && clearBtn) {
+        const hasActiveDatasets = window.activePersonDatasets.size > 0;
+
+        // Enable Načíst if datasets are selected
+        loadBtn.disabled = !hasActiveDatasets;
+
+        // Enable Vyčistit if datasets are loaded in cache
+        clearBtn.disabled = !window.realtimeMonitoringCache || Object.keys(window.realtimeMonitoringCache.datasets || {}).length === 0;
+      }
+    }
+
+    // Load selected datasets to cache (like forensic analysis)
+    function loadParallelPersonDatasets() {
+      if (window.activePersonDatasets.size === 0) {
+        console.log('No datasets selected for loading');
+        return;
+      }
+
+      // Initialize REAL-TIME MONITORING cache (separate from forensic analysis)
+      if (!window.realtimeMonitoringCache) {
+        window.realtimeMonitoringCache = {
+          mode: 'parallel-person',
+          datasets: {},
+          vehicleDatasets: {}
+        };
+      }
+
+      // Load each selected dataset
+      window.activePersonDatasets.forEach(datasetNumber => {
+        const datasetName = `SSHR_DATA${datasetNumber}`;
+
+        // Check if dataset exists globally
+        if (window[`realData_${datasetName}`]) {
+          window.realtimeMonitoringCache.datasets[datasetName] = window[`realData_${datasetName}`];
+          console.log(`📡 [REALTIME] Loaded ${datasetName} to cache (${window[`realData_${datasetName}`].length} points)`);
+        } else {
+          console.warn(`Dataset ${datasetName} not found!`);
+        }
+      });
+
+      console.log(`📡 [REALTIME] Loaded ${Object.keys(window.realtimeMonitoringCache.datasets).length} datasets to real-time monitoring cache`);
+
+      // Update button states
+      updateParallelControlButtons();
+
+      // Show success notification
+      console.log('Datasets prepared for animation. Use Controls RUN to start.');
+    }
+
+    // Clear datasets and cache
+    function clearParallelPersonDatasets() {
+      // Clear active selections
+      window.activePersonDatasets.clear();
+
+      // Remove active class from all buttons
+      document.querySelectorAll('.person-select-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+
+      // Clear REAL-TIME MONITORING cache
+      if (window.realtimeMonitoringCache) {
+        window.realtimeMonitoringCache.datasets = {};
+        window.realtimeMonitoringCache.vehicleDatasets = {};
+      }
+
+      // Reset Animation Layers to default state (Bez kotev, nic nezaškrtnuto)
+      const bezKotevRadio = document.querySelector('input[name="anchor-layer"][value="bez-kotev"]');
+      if (bezKotevRadio) {
+        bezKotevRadio.checked = true;
+        bezKotevRadio.dispatchEvent(new Event('change'));
+        console.log('🔄 [PARALLEL-CLEAR] Animation layers reset to default (Bez kotev)');
+      }
+
+      // Uncheck all polygon checkboxes
+      const polygonCheckboxes = document.querySelectorAll('input[name="polygon-layer"]');
+      polygonCheckboxes.forEach(checkbox => {
+        if (checkbox.checked) {
+          checkbox.checked = false;
+          checkbox.dispatchEvent(new Event('change'));
+        }
+      });
+      console.log('🔄 [PARALLEL-CLEAR] All polygon layers unchecked');
+
+      console.log('✅ [PARALLEL-CLEAR] Cleared all person datasets, cache and reset Animation Layers');
+
+      // Update button states
+      updateParallelControlButtons();
+    }
+
+    // Initialize parallel person controls
+    function initParallelPersonControls() {
+      // Initialize person selection
+      initPersonSelection();
+
+      // Add event listeners for load/clear buttons
+      const loadBtn = document.getElementById('parallel-person-load-btn');
+      const clearBtn = document.getElementById('parallel-person-clear-btn');
+
+      if (loadBtn) {
+        loadBtn.addEventListener('click', loadParallelPersonDatasets);
+      }
+
+      if (clearBtn) {
+        clearBtn.addEventListener('click', clearParallelPersonDatasets);
+      }
+
+      // Initial button state update
+      updateParallelControlButtons();
+    }
+
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+      initParallelPersonControls();
+    });
+
+    // Export functions globally
+    window.toggleSSHRControlPanel = toggleSSHRControlPanel;
+    window.updateSSHRSpeedDisplay = updateSSHRSpeedDisplay;
+    window.initPersonSelection = initPersonSelection;
+    window.selectPersonCount = selectPersonCount;
+    window.loadParallelPersonDatasets = loadParallelPersonDatasets;
+    window.clearParallelPersonDatasets = clearParallelPersonDatasets;
+    window.updateParallelControlButtons = updateParallelControlButtons;
+  </script>
+
+  <!-- Jupiter GIS Connector -->
+  <script src="jupiter-gis-connector.js"></script>
+
+</body>
+</html>

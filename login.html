@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Prihlaseni | Inteligentni pastvina</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <style>
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --primary-dark: #2d3a2d;
+            --primary: #4a7c59;
+            --accent: #c49a6c;
+            --accent-light: #d4b48c;
+            --cream: #f5f0e8;
+            --text: #333333;
+            --text-light: #666666;
+            --white: #ffffff;
+            --red: #e53935;
+        }
+
+        body {
+            font-family: 'Source Sans 3', sans-serif;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #1a3a1a 40%, #2d4a2d 100%);
+            padding: 24px;
+        }
+
+        .login-card {
+            background: var(--white);
+            border-radius: 16px;
+            padding: 48px 40px;
+            max-width: 420px;
+            width: 100%;
+            box-shadow: 0 16px 48px rgba(0,0,0,0.3);
+            text-align: center;
+        }
+
+        .login-icon {
+            font-size: 3rem;
+            margin-bottom: 16px;
+        }
+
+        .login-card h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.6rem;
+            color: var(--primary-dark);
+            margin-bottom: 8px;
+        }
+
+        .login-card .subtitle {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 32px;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text);
+            margin-bottom: 8px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 12px 16px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 1rem;
+            color: var(--text);
+            transition: border-color 0.3s ease;
+            outline: none;
+        }
+
+        .form-group input:focus {
+            border-color: var(--primary);
+        }
+
+        .error-msg {
+            color: var(--red);
+            font-size: 0.85rem;
+            margin-bottom: 16px;
+            min-height: 20px;
+        }
+
+        .btn-submit {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: var(--white);
+            border: none;
+            border-radius: 8px;
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 1rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s ease, transform 0.2s ease;
+        }
+
+        .btn-submit:hover {
+            background: var(--primary-dark);
+            transform: translateY(-1px);
+        }
+
+        .back-link {
+            display: inline-block;
+            margin-top: 24px;
+            color: var(--text-light);
+            font-size: 0.85rem;
+            text-decoration: none;
+            transition: color 0.3s ease;
+        }
+
+        .back-link:hover { color: var(--primary); }
+    </style>
+</head>
+<body>
+    <div class="login-card">
+        <div class="login-icon">&#x1F512;</div>
+        <h1>Prihlaseni</h1>
+        <p class="subtitle">Pristup pro cleny operacni skupiny</p>
+
+        <form id="loginForm" onsubmit="return handleLogin(event)">
+            <div class="form-group">
+                <label for="password">Heslo</label>
+                <input type="password" id="password" placeholder="Zadejte heslo" autocomplete="current-password" required>
+            </div>
+            <div class="error-msg" id="errorMsg"></div>
+            <button type="submit" class="btn-submit">Prihlasit se</button>
+        </form>
+
+        <a href="index.html" class="back-link">&larr; Zpet na hlavni stranku</a>
+    </div>
+
+    <script>
+    function handleLogin(e) {
+        e.preventDefault();
+        var pw = document.getElementById('password').value;
+        var err = document.getElementById('errorMsg');
+
+        if (pw === 'ekofarma2026') {
+            sessionStorage.setItem('pastvina_auth', 'true');
+            window.location.href = 'dashboard.html';
+        } else {
+            err.textContent = 'Nespravne heslo. Zkuste to znovu.';
+            document.getElementById('password').value = '';
+            document.getElementById('password').focus();
+        }
+        return false;
+    }
+
+    // If already authenticated, redirect
+    if (sessionStorage.getItem('pastvina_auth') === 'true') {
+        window.location.href = 'dashboard.html';
+    }
+    </script>
+</body>
+</html>

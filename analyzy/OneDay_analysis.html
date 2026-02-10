@@ -1,0 +1,1266 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Analýza chování krávy - Enhanced v2.0</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #e0e0e0;
+            min-height: 100vh;
+        }
+        
+        /* Overlay styles */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 15, 30, 0.97);
+            z-index: 9999;
+            display: none;
+            justify-content: center;
+            align-items: center;
+        }
+        .overlay.open { display: flex; }
+        .overlay-card {
+            background: linear-gradient(145deg, #1f4068, #162447);
+            border-radius: 18px;
+            padding: 35px 40px;
+            max-width: 550px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+        .overlay-card h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.6em;
+            text-align: center;
+        }
+        .overlay-card p {
+            color: #aaa;
+            margin-bottom: 20px;
+            font-size: 0.95em;
+            line-height: 1.5;
+        }
+        .overlay-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 15px;
+        }
+        .overlay-row input[type="text"],
+        .overlay-row input[type="date"] {
+            flex: 1 1 200px;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1em;
+        }
+        .overlay-row input:focus {
+            outline: none;
+            border-color: #e94560;
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+        }
+        .overlay-status {
+            color: #f87171;
+            font-size: 0.9em;
+            min-height: 1.2em;
+            margin-top: 10px;
+        }
+        .input-group {
+            margin-bottom: 15px;
+        }
+        .input-group label {
+            display: block;
+            color: #aaa;
+            margin-bottom: 6px;
+            font-size: 0.9em;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1em;
+        }
+        .input-hint {
+            color: #888;
+            font-size: 0.8em;
+            margin-top: 4px;
+        }
+        
+        /* Button styles */
+        .btn {
+            padding: 10px 20px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.95em;
+            transition: all 0.2s;
+        }
+        .btn.primary {
+            background: linear-gradient(135deg, #e94560, #c73e54);
+            color: #fff;
+        }
+        .btn.primary:hover { background: linear-gradient(135deg, #f85c75, #e94560); }
+        .btn:not(.primary) {
+            background: rgba(255,255,255,0.1);
+            color: #ccc;
+        }
+        .btn:not(.primary):hover { background: rgba(255,255,255,0.2); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        
+        /* Header */
+        .header {
+            background: linear-gradient(90deg, #0f3460, #16213e);
+            padding: 20px;
+            border-bottom: 3px solid #e94560;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .header-text {
+            flex: 1 1 auto;
+            text-align: center;
+        }
+        .header h1 { color: #fff; font-size: 1.8em; margin-bottom: 5px; }
+        .header .subtitle { color: #e94560; font-size: 1em; }
+        .header-buttons {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        
+        /* Container */
+        .container { max-width: 1600px; margin: 0 auto; padding: 20px; }
+        
+        /* Stats grid */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 12px;
+            margin-bottom: 14px;
+        }
+        .stat-card {
+            background: linear-gradient(145deg, #1f4068, #162447);
+            border-radius: 12px;
+            padding: 12px;
+            text-align: center;
+            box-shadow: 0 6px 18px rgba(0,0,0,0.25);
+            border: 1px solid rgba(233, 69, 96, 0.25);
+        }
+        .stat-card .icon { font-size: 1.4em; margin-bottom: 4px; }
+        .stat-card .value { font-size: 1.25em; font-weight: 600; color: #e94560; }
+        .stat-card .label { color: #aaa; font-size: 0.72em; margin-top: 3px; }
+        .stat-chip {
+            display: inline-block;
+            margin-left: 4px;
+            padding: 2px 6px;
+            border-radius: 8px;
+            font-size: 0.65em;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            background: rgba(255,255,255,0.08);
+            border: 1px solid transparent;
+        }
+        .stat-chip.low { border-color: #fbbf24; color: #fbbf24; }
+        .stat-chip.normal { border-color: #34d399; color: #34d399; }
+        .stat-chip.high { border-color: #f97316; color: #f97316; }
+        .stat-chip.critical { border-color: #ef4444; color: #ef4444; }
+        .stat-chip.neutral { border-color: #9ca3af; color: #9ca3af; }
+        .posture-confidence-panel {
+            display: flex;
+            flex-direction: column;
+            gap: 14px;
+        }
+        .posture-bar-container {
+            padding: 16px;
+            border-radius: 12px;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            background: rgba(15, 23, 42, 0.65);
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.35);
+        }
+        .posture-bar {
+            display: flex;
+            width: 100%;
+            height: 18px;
+            border-radius: 999px;
+            overflow: hidden;
+            background: rgba(255,255,255,0.08);
+            margin-bottom: 12px;
+        }
+        .posture-segment {
+            position: relative;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.7em;
+            font-weight: 600;
+            letter-spacing: 0.05em;
+            color: #0f172a;
+        }
+        .posture-segment span {
+            padding: 0 4px;
+            text-shadow: 0 0 10px rgba(255,255,255,0.7);
+        }
+        .posture-segment.standing { background: #38bdf8; color: #082f49; }
+        .posture-segment.lying { background: #34d399; color: #064e3b; }
+        .posture-segment.transition { background: #fbbf24; color: #422006; }
+        .posture-metric-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+        }
+        .posture-metric {
+            background: rgba(15, 23, 42, 0.6);
+            border-radius: 12px;
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 12px 14px;
+        }
+        .posture-metric .metric-label {
+            font-size: 0.78em;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: #c4b5fd;
+        }
+        .posture-metric .metric-value {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #f8fafc;
+            margin-top: 3px;
+        }
+        .posture-metric .metric-sub {
+            font-size: 0.78em;
+            color: #d1d5db;
+            margin-top: 6px;
+            line-height: 1.4;
+        }
+        .posture-legend {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 16px;
+            font-size: 0.8em;
+            color: #cbd5f5;
+        }
+        .posture-legend span {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .posture-dot {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            display: inline-block;
+        }
+        
+        /* Breeding info card */
+        .breeding-card {
+            background: linear-gradient(145deg, #1f4068, #162447);
+            border-radius: 12px;
+            padding: 15px 20px;
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(233, 69, 96, 0.25);
+        }
+        .breeding-card.alert-warning {
+            border-color: #f59e0b;
+            background: linear-gradient(145deg, #3d2f1f, #2d2318);
+        }
+        .breeding-icon { font-size: 2.5em; }
+        .breeding-details { flex: 1; }
+        .breeding-details strong { color: #e94560; font-size: 1.1em; }
+        .breeding-details div { color: #aaa; font-size: 0.9em; margin-top: 3px; }
+        .alert-text { color: #f59e0b !important; font-weight: 600; margin-top: 8px !important; }
+        
+        /* Cross-validation card */
+        .cross-val-card {
+            background: linear-gradient(145deg, #1a3a5c, #152a42);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(52, 152, 219, 0.4);
+        }
+        .cross-val-header {
+            color: #3498db;
+            font-weight: 600;
+            font-size: 1.05em;
+            margin-bottom: 12px;
+        }
+        .cross-val-stats {
+            display: flex;
+            gap: 25px;
+            flex-wrap: wrap;
+        }
+        .cv-stat {
+            text-align: center;
+        }
+        .cv-value {
+            display: block;
+            font-size: 1.4em;
+            font-weight: 600;
+            color: #3498db;
+        }
+        .cv-label {
+            font-size: 0.75em;
+            color: #888;
+        }
+
+        /* FMB920 Technical Context card */
+        .tech-context-card {
+            background: linear-gradient(145deg, #2d3a4a, #1e2a38);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(156, 163, 175, 0.3);
+        }
+        .tech-context-header {
+            color: #9ca3af;
+            font-weight: 600;
+            font-size: 1.05em;
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .tech-context-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 15px;
+        }
+        .tech-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 10px 12px;
+        }
+        .tech-item-label {
+            color: #6b7280;
+            font-size: 0.75em;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-bottom: 4px;
+        }
+        .tech-item-value {
+            color: #d1d5db;
+            font-size: 0.95em;
+            font-weight: 500;
+        }
+        .tech-item-note {
+            color: #9ca3af;
+            font-size: 0.78em;
+            margin-top: 4px;
+            font-style: italic;
+        }
+        .tech-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 4px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .tech-badge.normal { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+        .tech-badge.warning { background: rgba(245, 158, 11, 0.2); color: #f59e0b; }
+        .tech-badge.info { background: rgba(59, 130, 246, 0.2); color: #3b82f6; }
+        
+        /* Section styles */
+        .section {
+            background: linear-gradient(145deg, #1f4068, #162447);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            border: 1px solid rgba(233, 69, 96, 0.2);
+        }
+        .section h2 {
+            color: #e94560;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid rgba(233, 69, 96, 0.3);
+            padding-bottom: 10px;
+        }
+        
+        /* Collapsible sections */
+        details.collapsible {
+            background: linear-gradient(145deg, #1f4068, #162447);
+            border-radius: 15px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 25px rgba(0,0,0,0.3);
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            overflow: hidden;
+        }
+        details.collapsible summary {
+            padding: 18px 20px;
+            cursor: pointer;
+            color: #e94560;
+            font-weight: 600;
+            font-size: 1.15em;
+            background: rgba(0,0,0,0.15);
+            list-style: none;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        details.collapsible summary::-webkit-details-marker { display: none; }
+        details.collapsible summary::before {
+            content: '▸';
+            transition: transform 0.2s;
+        }
+        details.collapsible[open] summary::before { transform: rotate(90deg); }
+        details.collapsible .collapsible-body { padding: 20px; }
+        
+        /* Map styles */
+        .map-container { height: 450px; border-radius: 10px; overflow: hidden; position: relative; }
+        #mapDay, #mapNight { height: 100%; width: 100%; }
+        .map-fullscreen-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.6);
+            color: #fff;
+            border: none;
+            border-radius: 8px;
+            padding: 6px 10px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.85em;
+            z-index: 1200;
+        }
+        .map-fullscreen-btn:hover { background: rgba(0,0,0,0.8); }
+        .map-fullscreen-btn::before {
+            content: '';
+            display: inline-block;
+            width: 14px;
+            height: 14px;
+            border: 2px solid #fff;
+            border-radius: 3px;
+            line-height: 1;
+        }
+        body.map-fullscreen-active { overflow: hidden; }
+        .chart-container.fullscreen {
+            position: fixed !important;
+            inset: 20px;
+            width: auto !important;
+            height: auto !important;
+            z-index: 10000;
+            background: #0b1a2b;
+            border: 2px solid #e94560;
+        }
+        .chart-container.fullscreen .map-container { height: calc(100vh - 140px); }
+        .map-layer-select {
+            position: absolute;
+            top: 12px;
+            left: 15px;
+            display: none;
+            gap: 8px;
+            align-items: center;
+            background: rgba(0,0,0,0.55);
+            padding: 6px 10px;
+            border-radius: 10px;
+            color: #fff;
+            z-index: 11;
+        }
+        .map-layer-select label { font-size: 0.85em; margin-right: 6px; }
+        .map-layer-select select {
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(233,69,96,0.35);
+            color: #fff;
+            border-radius: 8px;
+            padding: 4px 8px;
+        }
+        .chart-container.fullscreen .map-layer-select { display: flex; }
+        .fence-arrow-icon {
+            background: transparent !important;
+            border: none !important;
+        }
+        .fence-arrow {
+            width: 0;
+            height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+            border-bottom: 16px solid #000;
+            filter: drop-shadow(0 0 2px rgba(0,0,0,0.85));
+            transform-origin: center 14px;
+        }
+        .fence-arrow.fence-I,
+        .fence-arrow.fence-II,
+        .fence-arrow.fence-III {
+            border-bottom-color: #000;
+        }
+        
+        /* Charts */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 20px;
+        }
+        .chart-container {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            position: relative;
+        }
+        .chart-wrapper { position: relative; height: 280px; }
+        
+        /* Timeline */
+        .behavior-timeline {
+            display: flex;
+            height: 50px;
+            border-radius: 10px;
+            overflow: hidden;
+            margin-top: 15px;
+        }
+        .timeline-segment {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 0.7em;
+            font-weight: bold;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+        .lying { background: linear-gradient(180deg, #4CAF50, #2E7D32); }
+        .standing { background: linear-gradient(180deg, #FF9800, #F57C00); }
+        .walking { background: linear-gradient(180deg, #2196F3, #1565C0); }
+        .unknown { background: linear-gradient(180deg, #6b7280, #4b5563); }
+
+        /* Timeline axis with time labels */
+        .timeline-axis {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 0.75em;
+            color: #888;
+            position: relative;
+            height: 25px;
+        }
+        .timeline-axis .tick {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            position: absolute;
+            transform: translateX(-50%);
+        }
+        .timeline-axis .tick::before {
+            content: '';
+            width: 1px;
+            height: 8px;
+            background: #555;
+            margin-bottom: 3px;
+        }
+        .timeline-axis .tick.major::before {
+            height: 12px;
+            background: #888;
+        }
+        .timeline-axis .tick.major {
+            font-weight: bold;
+            color: #aaa;
+        }
+
+        /* Legend */
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 25px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .legend-item { display: flex; align-items: center; gap: 8px; }
+        .legend-color { width: 18px; height: 18px; border-radius: 4px; }
+        .legend-points {
+            border-top: 1px solid #444;
+            padding-top: 10px;
+        }
+        .legend-point-col {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            min-width: 180px;
+            background: rgba(255,255,255,0.02);
+            border-radius: 10px;
+            padding: 8px 12px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .legend-point-title {
+            color: #bbb;
+            font-size: 0.85em;
+            font-weight: 600;
+        }
+        .legend-point-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            color: #ccc;
+            font-size: 0.8em;
+        }
+        .point-swatch {
+            display: inline-block;
+        }
+        .point-swatch.square {
+            width: 14px;
+            height: 14px;
+            border: 2px solid rgba(255,255,255,0.6);
+        }
+        .point-swatch.triangle {
+            width: 0;
+            height: 0;
+            border-left: 7px solid transparent;
+            border-right: 7px solid transparent;
+        }
+        .legend-point-note {
+            color: #888;
+            font-size: 0.78em;
+            text-align: center;
+            margin-top: 8px;
+            flex-basis: 100%;
+        }
+        
+        /* Zones */
+        .lying-zones, .standing-zones, .zones-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .zone-card {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            border-left: 4px solid #4CAF50;
+        }
+        .zone-card.standing-zone { border-left-color: #FF9800; }
+        .zone-card h4, .zone-header { color: #4CAF50; margin-bottom: 8px; font-size: 0.95em; }
+        .standing-zone .zone-header { color: #FF9800; }
+        .zone-time { font-size: 1.2em; font-weight: 600; color: #fff; }
+        .zone-coords { font-size: 0.8em; color: #888; margin-top: 4px; }
+        .progress-bar {
+            height: 8px;
+            background: rgba(255,255,255,0.1);
+            border-radius: 4px;
+            overflow: hidden;
+            margin-top: 8px;
+        }
+        .progress-fill { height: 100%; border-radius: 4px; }
+        .progress-fill.standing { background: #FF9800; }
+        
+        /* Isolation events */
+        .isolation-list {
+            display: grid;
+            gap: 10px;
+            margin-top: 10px;
+        }
+        .isolation-event {
+            background: rgba(245, 158, 11, 0.1);
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            border-radius: 10px;
+            padding: 12px 15px;
+            display: flex;
+            gap: 20px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        .isolation-time { color: #f59e0b; font-weight: 600; }
+        .isolation-duration { color: #fff; }
+        .isolation-distance { color: #888; font-size: 0.9em; }
+        
+        /* Distance comparison */
+        .distance-comparison {
+            display: flex;
+            justify-content: center;
+            gap: 60px;
+            margin: 20px 0;
+        }
+        .distance-item { text-align: center; }
+        .distance-item .icon { font-size: 2.5em; margin-bottom: 10px; }
+        .distance-item .value { font-size: 2em; font-weight: 700; color: #fff; }
+        .distance-item .label { color: #aaa; font-size: 0.9em; }
+        .distance-item.day .value { color: #FFD700; }
+        .distance-item.night .value { color: #4169E1; }
+        
+        /* Vector analysis */
+        .vector-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+            gap: 15px;
+            margin-top: 15px;
+        }
+        .vector-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+            text-align: center;
+        }
+        .vector-item .direction { font-size: 2em; margin-bottom: 5px; }
+        .vector-item .label { color: #888; font-size: 0.8em; }
+        .vector-item .value { color: #e94560; font-weight: 600; }
+        
+        /* Two column layout */
+        .two-col {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        @media (max-width: 900px) { .two-col { grid-template-columns: 1fr; } }
+        
+        /* Map mode controls */
+        .map-mode-controls {
+            display: flex;
+            gap: 15px;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .map-mode-controls select {
+            padding: 8px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(233,69,96,0.4);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+        }
+        .arrow-toggle {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+        }
+        .arrow-toggle input { cursor: pointer; }
+        
+        /* Behavior table */
+        .behavior-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+            font-size: 0.9em;
+        }
+        .behavior-table th, .behavior-table td {
+            padding: 10px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .behavior-table th { background: rgba(233, 69, 96, 0.2); color: #e94560; }
+        .behavior-table tr:hover { background: rgba(255,255,255,0.05); }
+        
+        /* Print styles */
+        @media print {
+            body { background: #fff !important; color: #000 !important; }
+            .no-print { display: none !important; }
+            .overlay { display: none !important; }
+            .section, .stat-card, .zone-card, .chart-container, details.collapsible {
+                background: #fff !important;
+                box-shadow: none !important;
+                border: 1px solid #ddd !important;
+                break-inside: avoid;
+            }
+            .header { background: #f5f5f5 !important; border-bottom-color: #e94560 !important; }
+            .header h1, .section h2, details.collapsible summary { color: #e94560 !important; }
+            .stat-card .value, .cv-value { color: #c73e54 !important; }
+            .stat-card .label, .cv-label { color: #666 !important; }
+            details.collapsible[open] { display: block; }
+            details.collapsible summary { background: #f9f9f9 !important; }
+        }
+        .cleaning-summary-card {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 15px;
+            padding: 18px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 14px;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+        }
+        .cleaning-title {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #60a5fa;
+            min-width: 180px;
+        }
+        .cleaning-metric {
+            display: flex;
+            flex-direction: column;
+            min-width: 140px;
+        }
+        .cleaning-metric span {
+            color: #9ca3af;
+            font-size: 0.85em;
+            margin-bottom: 4px;
+        }
+        .cleaning-metric strong {
+            font-size: 1.3em;
+            color: #fff;
+        }
+        .cleaning-empty {
+            width: 100%;
+            text-align: center;
+            color: #9ca3af;
+            font-size: 0.9em;
+        }
+    </style>
+</head>
+<body>
+    <!-- Dataset loading overlay -->
+    <div id="datasetOverlay" class="overlay no-print">
+        <div class="overlay-card">
+            <h2>🐄 OneDay Analysis v2.0</h2>
+            <p>Vylepšená analýza s GPS↔ACC cross-validací, detekcí pre-porodního chování a sledováním březosti.</p>
+            
+            <div class="input-group">
+                <label for="datasetInput">Název datasetu</label>
+                <input id="datasetInput" type="text" placeholder="ID227831_191225.js" autocomplete="off" />
+                <div class="input-hint">Formát: IDXXXXXX_ddmmyy.js (soubor musí být ve stejné složce)</div>
+            </div>
+            
+            <div class="input-group">
+                <label for="calvingDateInput">Datum posledního porodu (volitelné)</label>
+                <input id="calvingDateInput" type="date" />
+                <div class="input-hint">Pro výpočet stádia březosti a detekci pre-porodního chování</div>
+            </div>
+            
+            <div class="input-group">
+                <label for="bullDateInput">Datum odchodu býka z pastviny</label>
+                <input id="bullDateInput" type="date" />
+                <div class="input-hint">Na základě tohoto data odhadneme fertilní okno a pravděpodobnost březosti</div>
+            </div>
+            
+            <div class="overlay-row">
+                <button id="datasetLoadBtn" class="btn primary">Načíst a analyzovat</button>
+                <button id="datasetCancelBtn" class="btn">Zavřít</button>
+            </div>
+            <div id="datasetStatus" class="overlay-status"></div>
+        </div>
+    </div>
+    
+    <!-- Header -->
+    <div class="header">
+        <div class="header-buttons no-print">
+            <button id="changeDatasetBtn" class="btn">Změnit dataset</button>
+            <button id="exportPdfBtn" class="btn primary" disabled>Export PDF</button>
+        </div>
+        <div class="header-text">
+            <h1>🐄 Analýza chování krávy</h1>
+            <div class="subtitle">Teltonika FMB920 | Enhanced Analysis v2.0</div>
+        </div>
+    </div>
+    
+    <div class="container">
+        <!-- Breeding info -->
+        <div id="breedingInfo"></div>
+
+        <!-- Weather info -->
+        <div id="weatherInfo"></div>
+
+        <!-- Data cleaning summary -->
+        <section class="section" id="cleaningSummarySection">
+            <h2>Data cleaning statistika</h2>
+            <div id="cleaningSummary" class="cleaning-summary-card">
+                <p class="cleaning-empty">Zaznamy zatim nejsou.</p>
+            </div>
+        </section>
+
+        <!-- Cross-validation stats -->
+        <div id="crossValidationStats"></div>
+
+        <div class="section" id="postureSection">
+            <h2>📐 Postojová jistota</h2>
+            <div class="posture-confidence-panel" id="postureConfidencePanel">
+                <div style="color:#94a3b8;font-size:0.9em;">Načítám data o postojích...</div>
+            </div>
+        </div>
+
+        <!-- FMB920 Technical Context -->
+        <div id="fmb920TechContext" class="tech-context-card" style="display: none;">
+            <div class="tech-context-header">
+                <span>FMB920 Technical Context</span>
+                <span class="tech-badge info">Teltonika</span>
+            </div>
+            <div class="tech-context-grid">
+                <div class="tech-item">
+                    <div class="tech-item-label">Measurement Mode</div>
+                    <div class="tech-item-value">GPS/ACC Alternating</div>
+                    <div class="tech-item-note">Zeros in GPS or ACC data are normal - device alternates measurements</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-label">Battery</div>
+                    <div class="tech-item-value">Parkside 4Ah (80Wh)</div>
+                    <div class="tech-item-note">Expected runtime: ~12 days @ 350 mAh/day</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-label">Sleep Mode</div>
+                    <div class="tech-item-value" id="sleepModeStatus">Not Active</div>
+                    <div class="tech-item-note">Sleep mode not effective on cow (chewing triggers accelerometer)</div>
+                </div>
+                <div class="tech-item">
+                    <div class="tech-item-label">Data Gaps</div>
+                    <div class="tech-item-value" id="dataGapsInfo">-</div>
+                    <div class="tech-item-note">Gaps are NOT outages - normal FMB920 measurement behavior</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main stats grid -->
+        <div class="stats-grid" id="mainStats"></div>
+        
+        <!-- Distance section -->
+        <details class="section collapsible" id="distanceSection" open>
+            <summary>📏 Vzdálenost - Den vs Noc</summary>
+            <div class="collapsible-body">
+                <div class="distance-comparison" id="distanceComparison"></div>
+                <div class="chart-container">
+                    <div class="chart-wrapper">
+                        <canvas id="distanceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+        </details>
+        
+        <!-- Maps section -->
+        <div class="section">
+            <h2>🗺️ Heat mapy + trajektorie (Den / Noc)</h2>
+            <div class="map-mode-controls no-print">
+                <label for="mapModeSelect">Vrstva mapy:</label>
+                <select id="mapModeSelect">
+                    <option value="heat">Heat mapa</option>
+                    <option value="trajectory">Trajektorie</option>
+                    <option value="points">Bodový graf</option>
+                </select>
+                <label class="arrow-toggle">
+                    <input type="checkbox" id="arrowToggle" checked />
+                    <span>Směr trajektorie</span>
+                </label>
+            </div>
+            <div class="two-col maps-grid">
+                <div class="chart-container">
+                    <h4 style="color: #FFD700; margin-bottom: 10px;">☀️ Den (06:00 - 17:59)</h4>
+                    <div class="map-container">
+                        <div class="map-layer-select" data-map="mapDay">
+                            <label for="mapLayerDay">Vrstva</label>
+                            <select id="mapLayerDay" data-layer-select>
+                                <option value="heat">Heat mapa</option>
+                                <option value="trajectory">Trajektorie</option>
+                                <option value="points">Bodový graf</option>
+                            </select>
+                        </div>
+                        <button class="map-fullscreen-btn" data-map="mapDay">Celá obrazovka</button>
+                        <div id="mapDay"></div>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <h4 style="color: #4169E1; margin-bottom: 10px;">🌙 Noc (18:00 - 05:59)</h4>
+                    <div class="map-container">
+                        <div class="map-layer-select" data-map="mapNight">
+                            <label for="mapLayerNight">Vrstva</label>
+                            <select id="mapLayerNight" data-layer-select>
+                                <option value="heat">Heat mapa</option>
+                                <option value="trajectory">Trajektorie</option>
+                                <option value="points">Bodový graf</option>
+                            </select>
+                        </div>
+                        <button class="map-fullscreen-btn" data-map="mapNight">Celá obrazovka</button>
+                        <div id="mapNight"></div>
+                    </div>
+                </div>
+            </div>
+            <div class="legend">
+                <div class="legend-item"><div class="legend-color" style="background: #4CAF50;"></div><span>Ležení</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: #FF9800;"></div><span>Stání</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: #2196F3;"></div><span>Chůze</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: #FFD700;"></div><span>Trajektorie (den)</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: #4169E1;"></div><span>Trajektorie (noc)</span></div>
+            </div>
+            <div class="legend legend-points">
+                <div class="legend-point-col">
+                    <span class="legend-point-title">Bodový graf - Stání (čtverce Indigo)</span>
+                    <div class="legend-point-row">
+                        <span class="point-swatch square" style="background: #6366f1;"></span>
+                        <span>3-5 minut</span>
+                    </div>
+                    <div class="legend-point-row">
+                        <span class="point-swatch square" style="background: #4f46e5;"></span>
+                        <span>5-10 minut</span>
+                    </div>
+                    <div class="legend-point-row">
+                        <span class="point-swatch square" style="background: #4338ca;"></span>
+                        <span>10-15 minut</span>
+                    </div>
+                    <div class="legend-point-row">
+                        <span class="point-swatch square" style="background: #3730a3;"></span>
+                        <span>15+ minut</span>
+                    </div>
+                </div>
+                <div class="legend-point-col">
+                    <span class="legend-point-title">Bodový graf - Ležení (trojúhelníky Orange)</span>
+                    <div class="legend-point-row">
+                        <span class="point-swatch triangle" style="border-bottom: 14px solid #fb923c;"></span>
+                        <span>3-5 minut</span>
+                    </div>
+                    <div class="legend-point-row">
+                        <span class="point-swatch triangle" style="border-bottom: 14px solid #f97316;"></span>
+                        <span>5-10 minut</span>
+                    </div>
+                    <div class="legend-point-row">
+                        <span class="point-swatch triangle" style="border-bottom: 14px solid #ea580c;"></span>
+                        <span>10-15 minut</span>
+                    </div>
+                    <div class="legend-point-row">
+                        <span class="point-swatch triangle" style="border-bottom: 14px solid #9a3412;"></span>
+                        <span>15+ minut</span>
+                    </div>
+                </div>
+                <div class="legend-point-note">
+                    Velikost markeru roste s délkou trvání; popupy ukazují přesný čas začátku a konce imitovaného stání/ležení.
+                </div>
+            </div>
+        </div>
+
+        <!-- Behavior timeline -->
+        <div class="section">
+            <h2>⏱️ Časová osa chování (24h)</h2>
+            <div id="behaviorTimeline" class="behavior-timeline"></div>
+            <div id="timelineAxis" class="timeline-axis"></div>
+            <div class="legend" style="margin-top: 15px;">
+                <div class="legend-item"><div class="legend-color" style="background: linear-gradient(180deg, #4CAF50, #2E7D32);"></div><span>Ležení</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: linear-gradient(180deg, #FF9800, #F57C00);"></div><span>Stání</span></div>
+                <div class="legend-item"><div class="legend-color" style="background: linear-gradient(180deg, #2196F3, #1565C0);"></div><span>Chůze</span></div>
+            </div>
+        </div>
+        
+        <!-- Activity charts -->
+        <details class="section collapsible" open>
+            <summary>📊 Aktivita a pohyb</summary>
+            <div class="collapsible-body">
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">Rozložení aktivit</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="activityPie"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">Hodinová aktivita</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="hourlyActivity"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">Rychlost pohybu (m/min)</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="speedChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">RMS dynamická akcelerace</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="rmsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">Energetická náročnost</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="energyChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4 style="color: #e94560; margin-bottom: 10px;">Akcelerometr Y-osa</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="accelerometerChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </details>
+        
+        <!-- Vector analysis -->
+        <details class="section collapsible">
+            <summary>🧭 Vektorová analýza pohybu</summary>
+            <div class="collapsible-body">
+                <div id="vectorAnalysis" class="vector-grid"></div>
+            </div>
+        </details>
+        
+        <!-- Lying zones -->
+        <div class="section">
+            <h2>🛏️ Zóny ležení</h2>
+            <div id="lyingZones" class="lying-zones"></div>
+        </div>
+        
+        <!-- Standing zones (>3 min) -->
+        <div class="section">
+            <h2>🧍 Zóny stání (>3 minuty)</h2>
+            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">
+                Místa, kde kráva stála déle než 3 minuty - důležitý indikátor pro pre-porodní chování
+            </p>
+            <div id="standingZones" class="standing-zones"></div>
+        </div>
+        
+        <!-- Isolation events -->
+        <div class="section">
+            <h2>⚠️ Události izolace</h2>
+            <p style="color: #888; font-size: 0.9em; margin-bottom: 15px;">
+                Detekce odloučení od stáda - březí krávy před porodem vyhledávají klidná odlehlá místa
+            </p>
+            <div id="isolationEvents"></div>
+        </div>
+        
+        <!-- Detailed behavior table -->
+        <details class="section collapsible">
+            <summary>📋 Detailní přehled behaviorálních úseků</summary>
+            <div class="collapsible-body">
+                <div style="overflow-x: auto; max-height: 400px;">
+                    <table class="behavior-table" id="behaviorTable">
+                        <thead>
+                            <tr>
+                                <th>Čas od</th>
+                                <th>Čas do</th>
+                                <th>Aktivita</th>
+                                <th>Trvání</th>
+                                <th>GPS Pozice</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </details>
+        
+        <!-- Algorithm info -->
+        <details class="section collapsible">
+            <summary>ℹ️ Informace o algoritmech</summary>
+            <div class="collapsible-body">
+                <div style="color: #aaa; font-size: 0.9em; line-height: 1.6;">
+                    <h4 style="color: #e94560; margin-bottom: 10px;">📊 1Hz Interpolace</h4>
+                    <p>Data jsou resamplovány na konzistentní 1Hz frekvenci pomocí lineární interpolace:</p>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>GPS souřadnice:</strong> Lineární interpolace mezi známými body</li>
+                        <li><strong>Akcelerometr:</strong> Lineární interpolace hodnot X, Y, Z</li>
+                        <li><strong>StandBy periody:</strong> Drží poslední známou hodnotu (kráva v klidu)</li>
+                    </ul>
+                    
+                    <h4 style="color: #e94560; margin-bottom: 10px;">⚙️ FMB920 Technické Chování</h4>
+                    <p><strong style="color: #f59e0b;">DŮLEŽITÉ:</strong> Teltonika FMB920 střídá měření GPS a akcelerometru - nuly v datech jsou NORMÁLNÍ chování, nikoliv chyba:</p>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>Střídání měření:</strong> Když jednotka měří GPS, akcelerometr může ukazovat nuly a naopak</li>
+                        <li><strong>Nulové hodnoty:</strong> NEJSOU chybou - jsou očekávaným chováním zařízení</li>
+                        <li><strong>Sleep mode na krávě:</strong> NEFUNGUJE efektivně - přežvykování neustále aktivuje akcelerometr</li>
+                        <li><strong>Baterie:</strong> Parkside 4Ah (80Wh), skutečná výdrž ~12 dní při ~350 mAh/den</li>
+                        <li><strong>Výpadky v datech:</strong> Jsou normální součástí FMB920 chování, NE ztráta signálu</li>
+                    </ul>
+
+                    <h4 style="color: #e94560; margin-bottom: 10px;">📏 Altitude Cross-validace</h4>
+                    <p>Výška (altitude) z GPS může validovat změny postury:</p>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>Vstávání:</strong> Když kráva vstane z ležení, výška se zvýší o ~0.8-1.2m</li>
+                        <li><strong>Lehání:</strong> Opačná změna výšky při lehání</li>
+                        <li><strong>Cross-check:</strong> Altitude změny korelují s akcelerometrem pro triple-validaci</li>
+                        <li><strong>Terén:</strong> Pomalé změny výšky (>30s) jsou pravděpodobně terénní, ne posturální</li>
+                    </ul>
+                    
+                    <h4 style="color: #e94560; margin-bottom: 10px;">🔄 GPS ↔ ACC Cross-validace</h4>
+                    <p>Systém kombinuje data z GPS a akcelerometru pro přesnou klasifikaci:</p>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>GPS primární pro pohyb:</strong> Haversine vzdálenost, rychlost</li>
+                        <li><strong>ACC primární pro posturu:</strong> Orientace gravitačního vektoru</li>
+                        <li><strong>Cross-check:</strong> GPS pohyb + ACC statický = GPS převáží</li>
+                        <li><strong>StandBy override:</strong> Během StandBy je pohyb vyloučen (jednotka by se probudila)</li>
+                    </ul>
+                    
+                    <h4 style="color: #e94560; margin-bottom: 10px;">🚶 Prahy klasifikace pohybu</h4>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>Stacionární:</strong> &lt; 0.02 m/s</li>
+                        <li><strong>Pastva:</strong> 0.02 - 0.08 m/s</li>
+                        <li><strong>Pomalá chůze:</strong> 0.08 - 0.25 m/s</li>
+                        <li><strong>Normální chůze:</strong> 0.25 - 0.8 m/s</li>
+                        <li><strong>Rychlá chůze:</strong> 0.8 - 1.5 m/s</li>
+                        <li><strong>Běh:</strong> &gt; 1.5 m/s</li>
+                    </ul>
+                    
+                    <h4 style="color: #e94560; margin-bottom: 10px;">🧍 Detekce postury (ACC)</h4>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>Stání:</strong> Z-osa &gt; 85% gravitace, X,Y &lt; 30%</li>
+                        <li><strong>Ležení:</strong> Z-osa &lt; 45%, X nebo Y &gt; 75%</li>
+                    </ul>
+                    
+                    <h4 style="color: #e94560; margin-bottom: 10px;">🤰 Březost a porod</h4>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>Gestace:</strong> ~283 dnů</li>
+                        <li><strong>Post-partum:</strong> min. 45 dnů před další koncepcí</li>
+                        <li><strong>Býk přítomen:</strong> duben - říjen</li>
+                        <li><strong>Pre-porodní alert:</strong> 14 dnů před očekávaným porodem</li>
+                    </ul>
+                    
+                    <h4 style="color: #e94560; margin-bottom: 10px;">⚠️ Detekce izolace</h4>
+                    <ul style="margin: 10px 0 15px 20px;">
+                        <li><strong>Práh vzdálenosti:</strong> &gt; 50m od centra areálu</li>
+                        <li><strong>Minimální doba:</strong> 30 minut souvisle</li>
+                        <li><strong>Význam:</strong> Březí krávy před porodem vyhledávají klidná odlehlá místa</li>
+                    </ul>
+                </div>
+            </div>
+        </details>
+    </div>
+    
+    <script src="ZONES_RUMBURK.js"></script>
+    <script src="Rumburk_analysis_core.js"></script>
+    <script src="PregnancyProbabilityCalculator.js"></script>
+    <script src="RUMBURK_TEMPERATURE.js"></script>
+    <script src="OneDay_analysis.js"></script>
+
+    <!-- ========================= -->
+    <!--  CLOUD FRIGATE CAMERA WALL -->
+    <!-- ========================= -->
+    <div id="cloudFrigateWrapper" style="background:#0c0c0c;padding:20px;border-radius:8px;margin-top:20px;">
+      <h2 style="color:#00ffc3;font-family:sans-serif;margin-bottom:10px;">Cloud Frigate – živé kamery (snapshot refresh)</h2>
+      <div style="display:flex;flex-wrap:wrap;gap:15px;justify-content:center;">
+        <div>
+          <h4 style="color:#00ffc3;text-align:center;">Camera 1</h4>
+          <img id="cam1" src="http://127.0.0.1:9001/frigate/api/Camera1/latest.webp"
+               style="width:480px;border-radius:8px;border:1px solid #00ffc3;">
+        </div>
+        <div>
+          <h4 style="color:#00ffc3;text-align:center;">Camera 2</h4>
+          <img id="cam2" src="http://127.0.0.1:9001/frigate/api/Camera2/latest.webp"
+               style="width:480px;border-radius:8px;border:1px solid #00ffc3;">
+        </div>
+        <div>
+          <h4 style="color:#00ffc3;text-align:center;">Camera 3</h4>
+          <img id="cam3" src="http://127.0.0.1:9001/frigate/api/Camera3/latest.webp"
+               style="width:480px;border-radius:8px;border:1px solid #00ffc3;">
+        </div>
+        <div>
+          <h4 style="color:#00ffc3;text-align:center;">Camera 4</h4>
+          <img id="cam4" src="http://127.0.0.1:9001/frigate/api/Camera4/latest.webp"
+               style="width:480px;border-radius:8px;border:1px solid #00ffc3;">
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // jednoduchý snapshot refresh přes lokální proxy
+      const refreshCameras = () => {
+        ["cam1","cam2","cam3","cam4"].forEach(id => {
+          const el = document.getElementById(id);
+          if (!el) return;
+          el.src = el.src.split("?")[0] + "?t=" + Date.now();
+        });
+      };
+      setInterval(refreshCameras, 1000);
+    </script>
+    <!-- ========================= -->
+</body>
+</html>

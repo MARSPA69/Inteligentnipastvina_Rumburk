@@ -1,0 +1,609 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <title>Rumburk – Ko-lokace krav</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+    <style>
+        :root {
+            --bg: #0f172a;
+            --card: #1e293b;
+            --border: rgba(255, 255, 255, 0.08);
+            --accent: #38bdf8;
+            --text: #f8fafc;
+            --muted: #94a3b8;
+            --danger: #f87171;
+            --success: #34d399;
+        }
+        * { box-sizing: border-box; }
+        body {
+            margin: 0;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg);
+            color: var(--text);
+        }
+        header {
+            padding: 20px;
+            border-bottom: 1px solid var(--border);
+        }
+        header h1 {
+            margin: 0;
+            font-size: 1.6em;
+        }
+        main {
+            padding: 20px;
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+        .card {
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 16px 20px;
+            margin-bottom: 18px;
+        }
+        .controls {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+            align-items: center;
+        }
+        select, button {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(148, 163, 184, 0.1);
+            color: var(--text);
+            font-size: 1rem;
+        }
+        button {
+            background: linear-gradient(120deg, #0ea5e9, #2563eb);
+            border: none;
+            cursor: pointer;
+        }
+        button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+            gap: 12px;
+        }
+        .summary-card {
+            padding: 14px 18px;
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.85);
+        }
+        .summary-card span {
+            display: block;
+            color: var(--muted);
+            font-size: 0.85em;
+        }
+        .summary-card strong {
+            font-size: 1.4em;
+        }
+        #statusText {
+            color: var(--muted);
+            margin-top: 6px;
+        }
+        .chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .chip {
+            padding: 6px 10px;
+            border-radius: 999px;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.4);
+            color: var(--accent);
+            font-size: 0.85em;
+        }
+        .day-chips {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-top: 10px;
+        }
+        .day-chip {
+            padding: 8px 14px;
+            border-radius: 8px;
+            background: rgba(148, 163, 184, 0.1);
+            border: 1px solid var(--border);
+            color: var(--text);
+            font-size: 0.9em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .day-chip:hover {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: var(--accent);
+        }
+        .day-chip.selected {
+            background: linear-gradient(120deg, #0ea5e9, #2563eb);
+            border-color: transparent;
+            color: white;
+        }
+        .day-chip .cow-count {
+            font-size: 0.75em;
+            opacity: 0.7;
+            margin-left: 4px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.95em;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+            text-align: left;
+        }
+        th {
+            color: var(--muted);
+            font-weight: 500;
+            position: sticky;
+            top: 0;
+            background: var(--card);
+            z-index: 1;
+        }
+        tbody tr:hover {
+            background: rgba(56, 189, 248, 0.05);
+        }
+        .table-container {
+            max-height: 380px;
+            overflow: auto;
+        }
+        .badge {
+            padding: 2px 8px;
+            border-radius: 999px;
+            font-size: 0.78em;
+            font-weight: 600;
+        }
+        .badge.day { background: rgba(59, 130, 246, 0.15); color: #93c5fd; }
+        .badge.night { background: rgba(14, 165, 233, 0.15); color: #67e8f9; }
+        .map-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 14px;
+        }
+        .map-panel {
+            border-radius: 14px;
+            overflow: hidden;
+            border: 1px solid var(--border);
+            background: #000;
+        }
+        .map-panel h3 {
+            margin: 0;
+            padding: 10px 14px;
+            background: rgba(15, 23, 42, 0.9);
+            border-bottom: 1px solid var(--border);
+            font-size: 1rem;
+        }
+        .map-panel .map {
+            height: 360px;
+        }
+        .legend {
+            margin-top: 8px;
+            font-size: 0.85em;
+            color: var(--muted);
+        }
+        .legend span {
+            margin-right: 12px;
+        }
+        .legend i {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            margin-right: 5px;
+            border-radius: 50%;
+        }
+        @media (max-width: 700px) {
+            .controls {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+            button, select { width: 100%; }
+        }
+
+        /* Fullscreen button on each map panel */
+        .map-panel {
+            position: relative;
+        }
+        .map-panel h3 {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .map-fullscreen-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            background: rgba(56, 189, 248, 0.15);
+            border: 1px solid var(--accent);
+            color: var(--accent);
+            font-size: 0.8em;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            transition: all 0.2s;
+        }
+        .map-fullscreen-btn:hover {
+            background: rgba(56, 189, 248, 0.3);
+        }
+        .map-fullscreen-btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        /* Fullscreen overlay */
+        .maps-fullscreen-overlay {
+            position: fixed;
+            inset: 0;
+            background: var(--bg);
+            z-index: 9999;
+            display: none;
+            flex-direction: column;
+        }
+        .maps-fullscreen-overlay.active {
+            display: flex;
+        }
+        .maps-fullscreen-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 24px;
+            background: var(--card);
+            border-bottom: 1px solid var(--border);
+        }
+        .maps-fullscreen-header h3 {
+            margin: 0;
+            font-size: 1.3em;
+        }
+        .maps-fullscreen-close {
+            padding: 10px 20px;
+            border-radius: 8px;
+            background: rgba(248, 113, 113, 0.15);
+            border: 1px solid var(--danger);
+            color: var(--danger);
+            font-size: 0.95em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .maps-fullscreen-close:hover {
+            background: rgba(248, 113, 113, 0.3);
+        }
+        .maps-fullscreen-body {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        .fullscreen-map-container {
+            flex: 1;
+            min-height: 0;
+        }
+        .fullscreen-map-container .leaflet-container {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Advanced analysis UI */
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-bottom: 12px;
+        }
+        .section-header h2 {
+            margin: 0;
+            font-size: 1.25em;
+        }
+        .section-header p {
+            margin: 4px 0 0;
+            color: var(--muted);
+        }
+        .range-pill {
+            padding: 8px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: rgba(56, 189, 248, 0.08);
+            color: var(--text);
+            font-size: 0.9em;
+        }
+        .method-tabs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .method-tab {
+            padding: 10px 14px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(148, 163, 184, 0.08);
+            color: var(--text);
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .method-tab.active {
+            background: linear-gradient(120deg, #0ea5e9, #2563eb);
+            border-color: transparent;
+            box-shadow: 0 0 0 1px rgba(56, 189, 248, 0.25);
+        }
+        .filter-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 12px;
+            margin-top: 12px;
+        }
+        .filter-box {
+            padding: 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(15, 23, 42, 0.75);
+        }
+        .filter-box label {
+            display: block;
+            color: var(--muted);
+            font-size: 0.9em;
+            margin-bottom: 6px;
+        }
+        .checkbox-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .checkbox-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 8px 12px;
+            border-radius: 10px;
+            border: 1px solid var(--border);
+            background: rgba(148, 163, 184, 0.06);
+            cursor: pointer;
+        }
+        .checkbox-pill input {
+            accent-color: #38bdf8;
+        }
+        .params-row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .params-row input {
+            width: 100%;
+            padding: 10px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: rgba(148, 163, 184, 0.08);
+            color: var(--text);
+        }
+        .chart-wrapper {
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 14px;
+            padding: 12px;
+            border: 1px solid var(--border);
+            margin-top: 12px;
+        }
+        .table-note {
+            color: var(--muted);
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <h1>Rumburk – Analýza ko-lokace krav</h1>
+        <p style="color: var(--muted); margin-top: 6px;">
+            Automatické vyhledání dvojic krav, které spolu strávily více než 60&nbsp;s ve vzdálenosti do 5&nbsp;m.
+        </p>
+    </header>
+    <main>
+        <section class="card">
+            <div>
+                <div style="color: var(--muted); font-size:0.9em; margin-bottom: 8px;">
+                    Vyberte den pro analýzu ko-lokace <span style="opacity:0.7">(zobrazeny pouze dny s 2+ kravami)</span>
+                </div>
+                <div class="day-chips" id="dayChipsContainer"></div>
+                <div style="margin-top: 15px; display: flex; align-items: center; gap: 15px;">
+                    <button id="analyzeBtn" disabled>Analyzovat vybraný den</button>
+                    <div id="statusText" style="color: var(--muted);">Vyberte den kliknutím.</div>
+                </div>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="summary-grid">
+                <div class="summary-card">
+                    <span>Dostupné krávy</span>
+                    <strong id="cowCount">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Zpracované páry</span>
+                    <strong id="pairCount">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Události (Den)</span>
+                    <strong id="dayEventCount">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Události (Noc)</span>
+                    <strong id="nightEventCount">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Nejdelší kontakt</span>
+                    <strong id="longestEvent">0 s</strong>
+                </div>
+            </div>
+            <div style="margin-top:12px;">
+                <span style="color: var(--muted); font-size:0.85em;">Krávy v tomto dni:</span>
+                <div class="chips" id="cowChipList"></div>
+            </div>
+        </section>
+
+        <section class="card">
+            <h2 style="margin-top:0;">Výsledky párové analýzy</h2>
+            <div class="table-container">
+                <table id="eventsTable">
+                    <thead>
+                        <tr>
+                            <th>Režim</th>
+                            <th>Kravy</th>
+                            <th>Začátek</th>
+                            <th>Konec</th>
+                            <th>Délka</th>
+                            <th>Min. vzdálenost</th>
+                            <th>Max. vzdálenost</th>
+                            <th>Průměr</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </section>
+
+        <section class="card">
+            <div class="map-grid">
+                <div class="map-panel">
+                    <h3>
+                        <span>Den (06:00 – 18:00)</span>
+                        <button type="button" class="map-fullscreen-btn" data-map="day">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                            </svg>
+                            Celá obrazovka
+                        </button>
+                    </h3>
+                    <div id="mapDay" class="map"></div>
+                </div>
+                <div class="map-panel">
+                    <h3>
+                        <span>Noc (18:00 – 06:00)</span>
+                        <button type="button" class="map-fullscreen-btn" data-map="night">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
+                            </svg>
+                            Celá obrazovka
+                        </button>
+                    </h3>
+                    <div id="mapNight" class="map"></div>
+                </div>
+            </div>
+            <div class="legend" id="legend"></div>
+        </section>
+
+        <section class="card">
+            <div class="section-header">
+                <div>
+                    <h2>Forenzní clustering ko-lokace</h2>
+                    <p>Volba metody (K-means++, Isolation Forest, DBSCAN) a ID krav pro analýzu ko-lokace.</p>
+                </div>
+                <div class="range-pill">Období: 14.12.2025 - 27.01.2026</div>
+            </div>
+
+            <div class="method-tabs" id="methodTabs">
+                <div class="method-tab active" data-method="kmeans">K-means++</div>
+                <div class="method-tab" data-method="isoforest">Isolation Forest</div>
+                <div class="method-tab" data-method="dbscan">DBSCAN</div>
+            </div>
+
+            <div style="margin-top: 10px; display:flex; flex-wrap:wrap; gap:8px; align-items:center;">
+                <span style="color: var(--muted); font-size:0.9em;">Rozdělení podle režimu:</span>
+                <div class="method-tabs" id="periodTabs">
+                    <div class="method-tab active" data-period="all">Celý den</div>
+                    <div class="method-tab" data-period="day">Den (06:00-18:00)</div>
+                    <div class="method-tab" data-period="night">Noc (18:00-06:00)</div>
+                </div>
+            </div>
+
+            <div class="filter-grid" style="margin-top: 12px;">
+                <div class="filter-box">
+                    <label>Vybrané krávy (ID)</label>
+                    <div class="checkbox-grid" id="cowSelector"></div>
+                </div>
+                <div class="filter-box">
+                    <label>Parametry metody</label>
+                    <div class="params-row">
+                        <input id="paramK" type="number" min="2" max="10" value="4" placeholder="k (K-means++)">
+                        <input id="paramContamination" type="number" min="0.01" max="0.3" step="0.01" value="0.05" placeholder="contamination (Isolation Forest)">
+                        <input id="paramEps" type="number" min="0.05" max="5" step="0.05" value="0.6" placeholder="eps (DBSCAN)">
+                        <input id="paramMinPts" type="number" min="2" max="15" step="1" value="5" placeholder="minPts (DBSCAN)">
+                    </div>
+                    <div style="margin-top:10px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+                        <button id="runAnalysisBtn">Spustit analýzu</button>
+                        <span id="analysisStatus" style="color: var(--muted);">Předvybrané všechny krávy v období.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="summary-grid" style="margin-top: 14px;">
+                <div class="summary-card">
+                    <span>Počet vybraných událostí</span>
+                    <strong id="metricEvents">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Skupiny / Clustery</span>
+                    <strong id="metricClusters">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Vybraná ID</span>
+                    <strong id="metricCows">0</strong>
+                </div>
+                <div class="summary-card">
+                    <span>Analyzováno dnů</span>
+                    <strong id="metricDays">0</strong>
+                </div>
+            </div>
+
+            <div class="chart-wrapper">
+                <canvas id="analysisChart" height="320"></canvas>
+            </div>
+
+            <div style="margin-top: 12px;">
+                <div id="interpretationBox" class="table-note" style="margin-bottom:10px;"></div>
+                <div class="table-note">Události jsou seřazené podle délky. Barva odpovídá clusteru/anomálii.</div>
+                <div class="table-container">
+                    <table id="analysisTable">
+                        <thead>
+                            <tr>
+                                <th>Metoda</th>
+                                <th>Pár</th>
+                                <th>Datum</th>
+                                <th>Čas</th>
+                                <th>Délka</th>
+                                <th>Prům. vzdálenost</th>
+                                <th>Skupina / Skóre</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Fullscreen Map Overlay (single map) -->
+    <div class="maps-fullscreen-overlay" id="mapsFullscreenOverlay">
+        <div class="maps-fullscreen-header">
+            <h3 id="fsMapTitle">Mapa na celou obrazovku</h3>
+            <button type="button" class="maps-fullscreen-close" id="closeMapsFullscreen">✕ Zavřít</button>
+        </div>
+        <div class="maps-fullscreen-body">
+            <div class="fullscreen-map-container" id="fsMapContainer"></div>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+    <script src="Rumburk_analysis_core.js"></script>
+    <script src="dataset_manifest.js"></script>
+    <script src="CoLocation_analysis.js"></script>
+</body>
+</html>

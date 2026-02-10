@@ -1,0 +1,1291 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BigData Komparace - Trendová analýza chování</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        :root {
+            --primary: #e94560;
+            --primary-dark: #c73e54;
+            --bg-dark: #1a1a2e;
+            --bg-medium: #16213e;
+            --bg-card: linear-gradient(145deg, #1f4068, #162447);
+            --text-light: #e0e0e0;
+            --text-muted: #aaa;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --info: #3b82f6;
+            --lying: #4CAF50;
+            --standing: #FF9800;
+            --walking: #2196F3;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, var(--bg-dark) 0%, var(--bg-medium) 100%);
+            color: var(--text-light);
+            min-height: 100vh;
+        }
+
+        /* Overlay - Input Form */
+        .overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(10, 15, 30, 0.97);
+            z-index: 9999;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .overlay.hidden { display: none; }
+        .overlay-card {
+            background: var(--bg-card);
+            border-radius: 18px;
+            padding: 35px 40px;
+            max-width: 600px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
+            border: 1px solid rgba(233, 69, 96, 0.3);
+        }
+        .overlay-card h2 {
+            color: var(--primary);
+            margin-bottom: 8px;
+            font-size: 1.6em;
+            text-align: center;
+        }
+        .overlay-card .subtitle {
+            color: var(--text-muted);
+            text-align: center;
+            margin-bottom: 25px;
+            font-size: 0.95em;
+        }
+
+        .input-group {
+            margin-bottom: 18px;
+        }
+        .input-group label {
+            display: block;
+            color: var(--text-muted);
+            margin-bottom: 6px;
+            font-size: 0.9em;
+            font-weight: 500;
+        }
+        .input-group input, .input-group select {
+            width: 100%;
+            padding: 12px 15px;
+            border-radius: 10px;
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 1em;
+        }
+        .input-group input:focus, .input-group select:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(233, 69, 96, 0.3);
+        }
+        .input-hint { color: #888; font-size: 0.8em; margin-top: 4px; }
+        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; }
+
+        /* Cow chips */
+        .available-cows {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 12px 15px;
+            margin-bottom: 20px;
+        }
+        .available-cows-title { color: var(--info); font-size: 0.85em; margin-bottom: 8px; }
+        .cow-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+        .cow-chip {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.5);
+            color: var(--info);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .cow-chip:hover { background: rgba(59, 130, 246, 0.4); }
+        .cow-chip .count {
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 10px;
+            margin-left: 6px;
+            font-size: 0.8em;
+        }
+
+        /* Buttons */
+        .btn {
+            padding: 12px 24px;
+            border-radius: 10px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 1em;
+            transition: all 0.2s;
+        }
+        .btn.primary {
+            background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+            color: #fff;
+            width: 100%;
+        }
+        .btn.primary:hover { background: linear-gradient(135deg, #f85c75, var(--primary)); }
+        .btn.primary:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn.secondary { background: rgba(255,255,255,0.1); color: #ccc; }
+
+        .status-message {
+            margin-top: 15px;
+            padding: 10px;
+            border-radius: 8px;
+            font-size: 0.9em;
+            text-align: center;
+        }
+        .status-message.error { background: rgba(239, 68, 68, 0.2); border: 1px solid rgba(239, 68, 68, 0.5); color: #f87171; }
+        .status-message.info { background: rgba(59, 130, 246, 0.2); border: 1px solid rgba(59, 130, 246, 0.5); color: var(--info); }
+
+        /* Header */
+        .header {
+            background: linear-gradient(90deg, #0f3460, var(--bg-medium));
+            padding: 15px 20px;
+            border-bottom: 3px solid var(--primary);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+            flex-wrap: wrap;
+        }
+        .header-text { flex: 1; text-align: center; }
+        .header h1 { color: #fff; font-size: 1.5em; margin-bottom: 3px; }
+        .header .subtitle { color: var(--primary); font-size: 0.9em; }
+        .header-buttons { display: flex; gap: 10px; }
+
+        /* Container */
+        .container { max-width: 1900px; margin: 0 auto; padding: 15px; }
+
+        /* Progress bar */
+        .progress-section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px 20px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(233, 69, 96, 0.25);
+        }
+        .progress-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .progress-title { color: var(--primary); font-weight: 600; }
+        .progress-stats { color: var(--text-muted); font-size: 0.9em; }
+        .progress-bar-container { height: 10px; background: rgba(0,0,0,0.3); border-radius: 5px; overflow: hidden; }
+        .progress-bar-fill {
+            height: 100%;
+            background: linear-gradient(90deg, var(--primary), #f85c75);
+            border-radius: 5px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        /* Info Panels Grid */
+        .info-panels-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 15px;
+            margin-bottom: 15px;
+        }
+        .info-panel {
+            background: var(--bg-card);
+            border-radius: 12px;
+            padding: 15px;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+        }
+        .info-panel h3 {
+            color: var(--primary);
+            font-size: 1em;
+            margin-bottom: 12px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(233, 69, 96, 0.2);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .info-panel-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }
+        .info-item {
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 10px;
+            text-align: center;
+        }
+        .info-item .value {
+            font-size: 1.3em;
+            font-weight: 600;
+            color: #fff;
+        }
+        .info-item .label {
+            font-size: 0.75em;
+            color: var(--text-muted);
+            margin-top: 3px;
+        }
+        .info-item.trend-up .value { color: var(--success); }
+        .info-item.trend-down .value { color: var(--danger); }
+        .info-item.trend-neutral .value { color: var(--warning); }
+        .info-item.wide { grid-column: span 2; }
+
+        /* Trend indicators */
+        .trend-arrow { font-size: 0.8em; margin-left: 4px; }
+        .trend-arrow.up { color: var(--success); }
+        .trend-arrow.down { color: var(--danger); }
+
+        /* Alert badges */
+        .alert-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 0.7em;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .alert-badge.danger { background: rgba(239, 68, 68, 0.3); color: #f87171; }
+        .alert-badge.warning { background: rgba(245, 158, 11, 0.3); color: #fbbf24; }
+        .alert-badge.success { background: rgba(34, 197, 94, 0.3); color: #4ade80; }
+        .alert-badge.info { background: rgba(59, 130, 246, 0.3); color: #60a5fa; }
+
+        /* Section styles */
+        .section {
+            background: var(--bg-card);
+            border-radius: 12px;
+            margin-bottom: 15px;
+            border: 1px solid rgba(233, 69, 96, 0.2);
+            overflow: hidden;
+        }
+        .section-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 15px;
+            cursor: pointer;
+            background: rgba(0,0,0,0.15);
+            transition: background 0.2s;
+        }
+        .section-header:hover {
+            background: rgba(0,0,0,0.25);
+        }
+        .section-header h2 {
+            color: var(--primary);
+            font-size: 1.1em;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .section-toggle {
+            color: var(--text-muted);
+            font-size: 1.2em;
+            transition: transform 0.3s;
+        }
+        .section.collapsed .section-toggle {
+            transform: rotate(-90deg);
+        }
+        .section-content {
+            padding: 15px;
+            transition: max-height 0.3s ease, padding 0.3s ease, opacity 0.3s ease;
+            max-height: 2000px;
+            opacity: 1;
+        }
+        .section.collapsed .section-content {
+            max-height: 0;
+            padding: 0 15px;
+            opacity: 0;
+            overflow: hidden;
+        }
+        .section h2 {
+            color: var(--primary);
+            margin-bottom: 12px;
+            font-size: 1.1em;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(233, 69, 96, 0.2);
+        }
+
+        /* Header calving date */
+        .header-calving {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            margin-top: 4px;
+        }
+        .header-calving span {
+            color: var(--info);
+            font-weight: 500;
+        }
+
+        /* Stats Summary */
+        .stats-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+            gap: 10px;
+        }
+        .stat-box {
+            background: rgba(0,0,0,0.25);
+            border-radius: 10px;
+            padding: 12px;
+            text-align: center;
+            border-left: 3px solid var(--primary);
+        }
+        .stat-box .icon { font-size: 1.3em; margin-bottom: 5px; }
+        .stat-box .value { font-size: 1.2em; font-weight: 600; color: #fff; }
+        .stat-box .label { font-size: 0.72em; color: var(--text-muted); margin-top: 3px; }
+        .stat-box.lying { border-color: var(--lying); }
+        .stat-box.standing { border-color: var(--standing); }
+        .stat-box.walking { border-color: var(--walking); }
+        .stat-box.alert { border-color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+
+        /* Timeline comparison */
+        .timeline-stack { margin-top: 10px; }
+        .timeline-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 6px;
+        }
+        .timeline-label {
+            width: 90px;
+            font-size: 0.8em;
+            color: var(--text-muted);
+            text-align: right;
+            padding-right: 10px;
+        }
+        .timeline-bar-container {
+            flex: 1;
+            height: 28px;
+            background: rgba(0,0,0,0.3);
+            border-radius: 4px;
+            overflow: hidden;
+            display: flex;
+        }
+        .timeline-segment {
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.65em;
+            color: rgba(255,255,255,0.8);
+            min-width: 0;
+        }
+        .timeline-segment.lying { background: var(--lying); }
+        .timeline-segment.standing { background: var(--standing); }
+        .timeline-segment.walking { background: var(--walking); }
+        .timeline-segment.unknown { background: #6b7280; }
+        .timeline-alerts {
+            width: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            padding-left: 8px;
+        }
+        .alert-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+        }
+        .alert-dot.danger { background: var(--danger); }
+        .alert-dot.warning { background: var(--warning); }
+
+        .timeline-axis {
+            display: flex;
+            margin-left: 90px;
+            margin-top: 5px;
+            font-size: 0.7em;
+            color: #666;
+        }
+        .timeline-axis span { flex: 1; text-align: center; }
+
+        .timeline-legend {
+            display: flex;
+            gap: 15px;
+            margin-top: 10px;
+            margin-left: 90px;
+            font-size: 0.8em;
+        }
+        .legend-item { display: flex; align-items: center; gap: 5px; }
+        .legend-color { width: 14px; height: 14px; border-radius: 3px; }
+
+        /* Day panels */
+        .days-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 12px;
+            margin-top: 10px;
+        }
+        .day-panel {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            overflow: hidden;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .day-panel.has-alert { border-color: rgba(239, 68, 68, 0.4); }
+        .day-panel-header {
+            background: rgba(0,0,0,0.3);
+            padding: 10px 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .day-panel-date {
+            font-weight: 600;
+            color: #fff;
+        }
+        .day-panel-records {
+            font-size: 0.8em;
+            color: var(--text-muted);
+        }
+        .day-panel-alerts {
+            display: flex;
+            gap: 5px;
+        }
+        .day-panel-body {
+            padding: 12px;
+        }
+        .day-panel-row {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 8px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .day-panel-row:last-child { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+        .day-metric {
+            text-align: center;
+            flex: 1;
+        }
+        .day-metric .value {
+            font-size: 1.1em;
+            font-weight: 600;
+            color: #fff;
+        }
+        .day-metric .label {
+            font-size: 0.7em;
+            color: var(--text-muted);
+        }
+        .day-metric.lying .value { color: var(--lying); }
+        .day-metric.standing .value { color: var(--standing); }
+        .day-metric.walking .value { color: var(--walking); }
+        .day-metric.alert .value { color: var(--danger); }
+
+        /* Comparison table */
+        .comparison-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85em;
+            margin-top: 10px;
+        }
+        .comparison-table th, .comparison-table td {
+            padding: 8px 10px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+        }
+        .comparison-table th {
+            background: rgba(233, 69, 96, 0.2);
+            color: var(--primary);
+            font-weight: 600;
+            position: sticky;
+            top: 0;
+        }
+        .comparison-table tr:hover { background: rgba(255,255,255,0.03); }
+        .comparison-table td.alert { color: var(--danger); font-weight: 600; }
+        .comparison-table td.warning { color: var(--warning); }
+        .comparison-table td.good { color: var(--success); }
+        .table-container {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        /* Charts */
+        .charts-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(350px, 1fr));
+            gap: 15px;
+            margin-top: 10px;
+        }
+        .chart-container {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 12px;
+        }
+        .chart-container h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 0.9em;
+        }
+        .chart-wrapper { position: relative; height: 220px; }
+
+        /* Cleaning summary */
+        .cleaning-summary {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .cleaning-aggregate,
+        .cleaning-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 15px;
+            padding: 12px 15px;
+            border-radius: 10px;
+            background: rgba(0,0,0,0.25);
+            border: 1px solid rgba(233, 69, 96, 0.15);
+            flex-wrap: wrap;
+        }
+        .cleaning-aggregate span,
+        .cleaning-item span {
+            color: var(--text-muted);
+            font-size: 0.85em;
+        }
+        .cleaning-aggregate strong,
+        .cleaning-item strong {
+            color: #fff;
+            font-size: 1.1em;
+        }
+        .cleaning-dataset {
+            flex: 1;
+            font-weight: 600;
+            color: var(--info);
+            min-width: 160px;
+        }
+        .cleaning-stat {
+            display: flex;
+            flex-direction: column;
+            min-width: 120px;
+        }
+        .cleaning-empty {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 15px 0;
+        }
+
+        /* Alerts section */
+        .alerts-list { margin-top: 10px; }
+        .no-alerts-msg {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 20px;
+        }
+
+        /* GGanimate Section */
+        .gganimate-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            margin-top: 10px;
+        }
+        .gganimate-controls {
+            background: rgba(0,0,0,0.2);
+            border-radius: 10px;
+            padding: 15px;
+        }
+        .gganimate-controls h4 {
+            color: var(--primary);
+            margin-bottom: 12px;
+            font-size: 0.95em;
+        }
+        .storyboard-select {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(233, 69, 96, 0.4);
+            background: rgba(0,0,0,0.3);
+            color: #fff;
+            font-size: 0.9em;
+            margin-bottom: 12px;
+        }
+        .storyboard-select option {
+            background: #1a1a2e;
+            color: #fff;
+        }
+        .storyboard-desc {
+            font-size: 0.8em;
+            color: var(--text-muted);
+            margin-bottom: 15px;
+            padding: 10px;
+            background: rgba(0,0,0,0.15);
+            border-radius: 6px;
+            min-height: 60px;
+        }
+        .gganimate-actions {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .btn-gganimate {
+            padding: 12px 20px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-weight: 600;
+            font-size: 0.9em;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            transition: all 0.2s;
+        }
+        .btn-gganimate.primary {
+            background: linear-gradient(135deg, #8b5cf6, #6366f1);
+            color: #fff;
+        }
+        .btn-gganimate.primary:hover {
+            background: linear-gradient(135deg, #a78bfa, #818cf8);
+        }
+        .btn-gganimate.secondary {
+            background: rgba(255,255,255,0.1);
+            color: #ccc;
+            border: 1px solid rgba(255,255,255,0.2);
+        }
+        .btn-gganimate.secondary:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .btn-gganimate:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .gganimate-preview {
+            background: rgba(0,0,0,0.25);
+            border-radius: 10px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+        .gganimate-preview h4 {
+            color: var(--primary);
+            margin-bottom: 10px;
+            font-size: 0.95em;
+        }
+        .animation-player {
+            flex: 1;
+            background: rgba(0,0,0,0.3);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 300px;
+            position: relative;
+            overflow: hidden;
+        }
+        .animation-player video,
+        .animation-player img {
+            max-width: 100%;
+            max-height: 100%;
+            border-radius: 6px;
+        }
+        .animation-placeholder {
+            color: var(--text-muted);
+            text-align: center;
+            padding: 40px;
+        }
+        .animation-placeholder .icon {
+            font-size: 3em;
+            margin-bottom: 10px;
+            opacity: 0.5;
+        }
+        .available-animations {
+            margin-top: 15px;
+        }
+        .available-animations h5 {
+            color: var(--text-muted);
+            font-size: 0.85em;
+            margin-bottom: 8px;
+        }
+        .animation-list {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+        .animation-chip {
+            background: rgba(139, 92, 246, 0.2);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            color: #a78bfa;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .animation-chip:hover {
+            background: rgba(139, 92, 246, 0.4);
+        }
+        .animation-chip.active {
+            background: rgba(139, 92, 246, 0.5);
+            border-color: #a78bfa;
+        }
+        .export-status {
+            margin-top: 10px;
+            padding: 10px;
+            border-radius: 6px;
+            font-size: 0.85em;
+            display: none;
+        }
+        .export-status.show { display: block; }
+        .export-status.success {
+            background: rgba(34, 197, 94, 0.2);
+            border: 1px solid rgba(34, 197, 94, 0.4);
+            color: #4ade80;
+        }
+        .export-status.error {
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.4);
+            color: #f87171;
+        }
+        .export-status.info {
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: #60a5fa;
+        }
+        .command-box {
+            background: rgba(0,0,0,0.4);
+            border-radius: 6px;
+            padding: 10px 12px;
+            font-family: 'Consolas', monospace;
+            font-size: 0.8em;
+            color: #4ade80;
+            margin-top: 10px;
+            word-break: break-all;
+            display: none;
+        }
+        .command-box.show { display: block; }
+        .copy-btn {
+            background: rgba(255,255,255,0.1);
+            border: none;
+            color: #ccc;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 0.75em;
+            cursor: pointer;
+            float: right;
+            margin-left: 10px;
+        }
+        .copy-btn:hover { background: rgba(255,255,255,0.2); }
+
+        /* Workflow steps */
+        .workflow-steps {
+            margin-top: 15px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            padding: 12px;
+        }
+        .workflow-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255,255,255,0.05);
+        }
+        .workflow-step:last-child { border-bottom: none; }
+        .step-num {
+            width: 24px;
+            height: 24px;
+            background: rgba(139, 92, 246, 0.3);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.8em;
+            font-weight: 600;
+            color: #a78bfa;
+        }
+        .workflow-step.done .step-num {
+            background: rgba(34, 197, 94, 0.3);
+            color: #4ade80;
+        }
+        .step-text { flex: 1; font-size: 0.85em; color: var(--text-muted); }
+        .workflow-step.done .step-text { color: #4ade80; }
+        .step-status {
+            font-size: 0.75em;
+            padding: 2px 8px;
+            border-radius: 10px;
+            background: rgba(255,255,255,0.1);
+            color: #888;
+        }
+        .step-status.done {
+            background: rgba(34, 197, 94, 0.2);
+            color: #4ade80;
+        }
+        .command-box-header {
+            margin-bottom: 8px;
+            color: #60a5fa;
+            font-weight: 600;
+        }
+        .command-box-hint {
+            margin-top: 8px;
+            font-size: 0.75em;
+            color: #888;
+        }
+        .refresh-btn {
+            margin-bottom: 10px;
+        }
+
+        /* Animation controls */
+        .animation-controls {
+            margin-top: 15px;
+            padding: 12px;
+            background: rgba(0,0,0,0.25);
+            border-radius: 8px;
+        }
+        .speed-control {
+            margin-bottom: 10px;
+        }
+        .speed-control label {
+            font-size: 0.85em;
+            color: var(--text-muted);
+            display: block;
+            margin-bottom: 5px;
+        }
+        .speed-control input[type="range"] {
+            width: 100%;
+            accent-color: var(--primary);
+        }
+        .playback-buttons {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+        }
+        .ctrl-btn {
+            padding: 6px 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(255,255,255,0.2);
+            background: rgba(255,255,255,0.1);
+            color: #ccc;
+            font-size: 0.8em;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .ctrl-btn:hover {
+            background: rgba(255,255,255,0.2);
+        }
+        .ctrl-btn.active {
+            background: rgba(139, 92, 246, 0.4);
+            border-color: #8b5cf6;
+            color: #fff;
+        }
+
+        .alert-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            background: rgba(0,0,0,0.2);
+            border-radius: 8px;
+            margin-bottom: 8px;
+            border-left: 3px solid var(--danger);
+        }
+        .alert-item.warning { border-color: var(--warning); }
+        .alert-item .alert-icon { font-size: 1.3em; }
+        .alert-item .alert-content { flex: 1; }
+        .alert-item .alert-date { font-weight: 600; color: #fff; }
+        .alert-item .alert-text { font-size: 0.85em; color: var(--text-muted); }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .header { flex-direction: column; text-align: center; }
+            .input-row { grid-template-columns: 1fr; }
+            .info-panels-grid { grid-template-columns: 1fr; }
+            .charts-grid { grid-template-columns: 1fr; }
+            .days-grid { grid-template-columns: 1fr; }
+        }
+
+        .hidden { display: none !important; }
+
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: rgba(0,0,0,0.2); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb { background: rgba(233, 69, 96, 0.5); border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: var(--primary); }
+    </style>
+</head>
+<body>
+    <!-- Input Overlay -->
+    <div id="inputOverlay" class="overlay">
+        <div class="overlay-card">
+            <h2>BigData Komparace</h2>
+            <p class="subtitle">Trendová analýza chování krávy - sledování vzorců a alertů</p>
+
+            <div class="available-cows" id="availableCows">
+                <div class="available-cows-title">Dostupné krávy ve folderu:</div>
+                <div class="cow-chips" id="cowChips">
+                    <span style="color: var(--text-muted);">Skenování...</span>
+                </div>
+            </div>
+
+            <div class="input-group">
+                <label for="cowIdInput">ID krávy</label>
+                <input id="cowIdInput" type="text" placeholder="např. 227831" autocomplete="off" />
+                <div class="input-hint">Zadejte ID krávy nebo klikněte na chip výše</div>
+            </div>
+
+            <div class="input-row">
+                <div class="input-group">
+                    <label for="calvingDateInput">Datum posledního porodu (volitelné)</label>
+                    <input id="calvingDateInput" type="date" />
+                </div>
+                <div class="input-group">
+                    <label for="bullDateInput">Datum odchodu býka z pastviny</label>
+                    <input id="bullDateInput" type="date" />
+                    <div class="input-hint">Pro výpočet pravděpodobnosti březosti</div>
+                </div>
+            </div>
+
+            <button id="startAnalysisBtn" class="btn primary" disabled>
+                Spustit analýzu
+            </button>
+
+            <div id="statusMessage" class="status-message hidden"></div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div id="mainContent" class="hidden">
+        <!-- Header -->
+        <div class="header">
+            <div class="header-buttons">
+                <button id="changeSettingsBtn" class="btn secondary">Změnit nastavení</button>
+            </div>
+            <div class="header-text">
+                <h1>BigData Komparace - Kráva <span id="headerCowId">---</span></h1>
+                <div class="subtitle"><span id="headerDateRange">---</span> | <span id="headerRecordCount">---</span> záznamů</div>
+                <div class="header-calving" id="headerCalvingRow">Poslední porod: <span id="headerCalvingDate">---</span></div>
+            </div>
+        </div>
+
+        <div class="container">
+            <!-- Progress Section -->
+            <div class="progress-section" id="progressSection">
+                <div class="progress-header">
+                    <span class="progress-title">Zpracování datasetů</span>
+                    <span class="progress-stats" id="progressStats">0 / 0</span>
+                </div>
+                <div class="progress-bar-container">
+                    <div class="progress-bar-fill" id="progressBar"></div>
+                </div>
+            </div>
+
+            <!-- Info Panels -->
+            <div class="info-panels-grid" id="infoPanels">
+                <!-- Panel: Vzdálenosti -->
+                <div class="info-panel">
+                    <h3>📏 Vzdálenosti</h3>
+                    <div class="info-panel-grid">
+                        <div class="info-item">
+                            <div class="value" id="avgDistanceDay">--</div>
+                            <div class="label">Průměr m/den</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="distanceVariability">--</div>
+                            <div class="label">Variabilita %</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="minDistance">--</div>
+                            <div class="label">Minimum</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="maxDistance">--</div>
+                            <div class="label">Maximum</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel: Aktivita -->
+                <div class="info-panel">
+                    <h3>⚡ Aktivita</h3>
+                    <div class="info-panel-grid">
+                        <div class="info-item">
+                            <div class="value" id="avgLyingTime">--</div>
+                            <div class="label">Ležení průměr</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="avgWalkingSpeed">--</div>
+                            <div class="label">Rychlost m/min</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="avgRMS">--</div>
+                            <div class="label">RMS průměr</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="totalRecords">--</div>
+                            <div class="label">Celkem záznamů</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Panel: Trendy -->
+                <div class="info-panel">
+                    <h3>📈 Trendy</h3>
+                    <div class="info-panel-grid">
+                        <div class="info-item" id="trendDistanceItem">
+                            <div class="value" id="trendDistance">--</div>
+                            <div class="label">Trend vzdálenost</div>
+                        </div>
+                        <div class="info-item" id="trendSpeedItem">
+                            <div class="value" id="trendSpeed">--</div>
+                            <div class="label">Trend rychlost</div>
+                        </div>
+                        <div class="info-item" id="trendLyingItem">
+                            <div class="value" id="trendLying">--</div>
+                            <div class="label">Trend ležení</div>
+                        </div>
+                        <div class="info-item">
+                            <div class="value" id="alertCount">0</div>
+                            <div class="label">Počet alertů</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Statistical Summary -->
+            <div class="section collapsed" id="statsSummarySection">
+                <div class="section-header" onclick="BigDataKomparace.toggleSection('statsSummarySection')">
+                    <h2>📊 Statistické vyhodnocení série</h2>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="stats-summary-grid" id="statsSummary">
+                        <!-- Generated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Alerts Section -->
+            <div class="section collapsed" id="alertsSection">
+                <div class="section-header" onclick="BigDataKomparace.toggleSection('alertsSection')">
+                    <h2>⚠️ Detekované alerty <span class="alert-badge danger" id="alertsBadge" style="margin-left: 10px; display: none;">0</span></h2>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="alerts-list" id="alertsList">
+                        <p style="color: var(--text-muted); text-align: center; padding: 20px;">Žádné alerty</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Timeline Comparison -->
+            <div class="section collapsed" id="timelineSection">
+                <div class="section-header" onclick="BigDataKomparace.toggleSection('timelineSection')">
+                    <h2>⏱️ Časové osy chování - den po dni</h2>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="timeline-stack" id="timelineStack">
+                        <!-- Generated dynamically -->
+                    </div>
+                    <div class="timeline-axis" id="timelineAxis">
+                        <span>00:00</span><span>04:00</span><span>08:00</span><span>12:00</span><span>16:00</span><span>20:00</span><span>24:00</span>
+                    </div>
+                    <div class="timeline-legend">
+                        <div class="legend-item"><div class="legend-color" style="background: var(--lying);"></div><span>Ležení</span></div>
+                        <div class="legend-item"><div class="legend-color" style="background: var(--standing);"></div><span>Stání</span></div>
+                        <div class="legend-item"><div class="legend-color" style="background: var(--walking);"></div><span>Chůze</span></div>
+                        <div class="legend-item"><div class="legend-color" style="background: #6b7280;"></div><span>Neznámé</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Day Panels -->
+            <div class="section collapsed" id="dayPanelsSection">
+                <div class="section-header" onclick="BigDataKomparace.toggleSection('dayPanelsSection')">
+                    <h2>📅 Porovnání jednotlivých dnů</h2>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="days-grid" id="daysGrid">
+                        <!-- Generated dynamically -->
+                    </div>
+                </div>
+            </div>
+
+            <!-- Comparison Table -->
+            <div class="section">
+                <h2>📋 Srovnávací tabulka metrik po dnech</h2>
+                <div class="table-container">
+                    <table class="comparison-table" id="comparisonTable">
+                        <thead>
+                            <tr>
+                                <th>Datum</th>
+                                <th>Vzdálenost (m)</th>
+                                <th>Rychlost (m/min)</th>
+                                <th>Ležení (h)</th>
+                                <th>Stání (h)</th>
+                                <th>Chůze (h)</th>
+                                <th>RMS</th>
+                                <th>Lie-bouts</th>
+                                <th>Alert</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparisonTableBody">
+                            <!-- Generated dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- GGanimate Section -->
+            <div class="section collapsed" id="gganimateSection">
+                <div class="section-header" onclick="BigDataKomparace.toggleSection('gganimateSection')">
+                    <h2>🎬 Animované vizualizace (gganimate)</h2>
+                    <span class="section-toggle">▼</span>
+                </div>
+                <div class="section-content">
+                    <div class="gganimate-grid">
+                        <!-- Controls -->
+                        <div class="gganimate-controls">
+                            <h4>Typ animace (Storyboard)</h4>
+                            <select class="storyboard-select" id="storyboardSelect">
+                                <option value="A">A – Animovaný spaghetti plot dne</option>
+                                <option value="B">B – Animovaná heatmapa aktivity</option>
+                                <option value="C">C – Behaviour fingerprint (24h rytmus)</option>
+                                <option value="D">D – HMM stavový timeline</option>
+                                <option value="E">E – GPS vs ACC konzistence</option>
+                            </select>
+                            <div class="storyboard-desc" id="storyboardDesc">
+                                <strong>Cíl:</strong> Ukázat pohyb krávy v čase a změny chování.<br>
+                                <strong>Použití:</strong> Stresové epizody, útěk, dezorientace.
+                            </div>
+
+                            <div class="gganimate-actions">
+                                <button class="btn-gganimate primary" id="generateAnimationBtn" onclick="BigDataKomparace.generateAnimation()">
+                                    <span>🎬</span> 1. Export CSV + spustit skript
+                                </button>
+                            </div>
+
+                            <div class="export-status" id="exportStatus"></div>
+
+                            <div class="workflow-steps" id="workflowSteps">
+                                <div class="workflow-step" id="step1">
+                                    <span class="step-num">1</span>
+                                    <span class="step-text">Klikni na tlacitko vyse - stahne se CSV</span>
+                                    <span class="step-status pending">ceka</span>
+                                </div>
+                                <div class="workflow-step" id="step2">
+                                    <span class="step-num">2</span>
+                                    <span class="step-text">Spust PowerShell skript (klik na tlacitko)</span>
+                                    <span class="step-status pending">ceka</span>
+                                </div>
+                                <div class="workflow-step" id="step3">
+                                    <span class="step-num">3</span>
+                                    <span class="step-text">Animace se automaticky vygeneruje</span>
+                                    <span class="step-status pending">ceka</span>
+                                </div>
+                            </div>
+
+                            <div class="command-box show" id="commandBox">
+                                <div class="command-box-header">Po stazeni CSV spust tento skript:</div>
+                                <button class="copy-btn" onclick="BigDataKomparace.openPowerShellScript()">Otevrit slozku</button>
+                                <span id="commandText">animations\run_animation.ps1</span>
+                                <div class="command-box-hint">
+                                    Klikni pravym na soubor -> "Spustit pomoci PowerShell"
+                                </div>
+                            </div>
+
+                            <div class="available-animations" id="availableAnimations">
+                                <h5>Dostupné animace:</h5>
+                                <button type="button" class="btn-gganimate secondary refresh-btn" id="refreshAnimationsBtn" onclick="BigDataKomparace.refreshAnimations()">
+                                    <span>🔄</span> Obnovit animace
+                                </button>
+                                <div class="animation-list" id="animationList">
+                                    <span style="color: var(--text-muted); font-size: 0.8em;">Žádné animace</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Preview -->
+                        <div class="gganimate-preview">
+                            <h4>Náhled animace</h4>
+                            <div class="animation-player" id="animationPlayer">
+                                <div class="animation-placeholder">
+                                    <div class="icon">🎬</div>
+                                    <div>Vyberte animaci nebo vygenerujte novou</div>
+                                    <div style="font-size: 0.85em; margin-top: 8px; color: #666;">
+                                        Animace se generují pomocí Python (matplotlib)
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="animation-controls" id="animationControls" style="display: none;">
+                                <div class="speed-control">
+                                    <label>Rychlost: <span id="speedValue">1.0</span>x</label>
+                                    <input type="range" id="speedSlider" min="0.1" max="3" step="0.1" value="1" onchange="BigDataKomparace.setAnimationSpeed(this.value)">
+                                </div>
+                                <div class="playback-buttons">
+                                    <button type="button" class="ctrl-btn" onclick="BigDataKomparace.setAnimationSpeed(0.25)" title="Velmi pomalu">0.25x</button>
+                                    <button type="button" class="ctrl-btn" onclick="BigDataKomparace.setAnimationSpeed(0.5)" title="Pomalu">0.5x</button>
+                                    <button type="button" class="ctrl-btn active" onclick="BigDataKomparace.setAnimationSpeed(1)" title="Normální">1x</button>
+                                    <button type="button" class="ctrl-btn" onclick="BigDataKomparace.setAnimationSpeed(2)" title="Rychle">2x</button>
+                                    <button type="button" class="ctrl-btn" onclick="BigDataKomparace.togglePause()" id="pauseBtn" title="Pauza">⏸️</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Charts -->
+            <div class="section">
+                <h2>📈 Trendové grafy</h2>
+                <div class="charts-grid">
+                    <div class="chart-container">
+                        <h4>Denní vzdálenost (m)</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="distanceChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Doba ležení (h)</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="lyingChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Rychlost chůze (m/min)</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="speedChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Počet lie-bouts</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="boutsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4>RMS akcelerace</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="rmsChart"></canvas>
+                        </div>
+                    </div>
+                    <div class="chart-container">
+                        <h4>Den vs Noc vzdálenost</h4>
+                        <div class="chart-wrapper">
+                            <canvas id="dayNightChart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Data Cleaning Summary -->
+            <div class="section" id="cleaningSummarySection">
+                <h2>Data cleaning statistika</h2>
+                <div class="cleaning-summary" id="cleaningSummaryList">
+                    <p class="cleaning-empty">Zaznamy se objevi po spusteni analyzy.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="ZONES_RUMBURK.js"></script>
+    <script src="Rumburk_analysis_core.js"></script>
+    <script src="PregnancyProbabilityCalculator.js"></script>
+    <script src="BigDataKomparace.js"></script>
+</body>
+</html>

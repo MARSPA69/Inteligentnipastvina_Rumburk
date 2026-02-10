@@ -1,0 +1,7 @@
+.vercel
+node_modules
+.DS_Store
+Thumbs.db
+*.log
+copy_assets.ps1
+copy_analyzy.ps1

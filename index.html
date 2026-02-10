@@ -1,0 +1,1808 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Inteligentní pastvina | Ekofarma Pejčoch Rumburk</title>
+    <meta name="description" content="Inteligentní pastvina - 2. výzva EIP MZe, Operační skupiny program 53.77. Monitoring skotu pomocí GPS, akcelerometrů a AI kamer.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;600;700&family=Source+Sans+3:wght@300;400;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <style>
+        /* ===== CSS RESET & VARIABLES ===== */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        :root {
+            --primary-dark: #2d3a2d;
+            --primary: #4a7c59;
+            --primary-light: #6b9e7a;
+            --accent: #c49a6c;
+            --accent-light: #d4b48c;
+            --cream: #f5f0e8;
+            --cream-dark: #e8dfd3;
+            --sky: #6ba3d6;
+            --sky-light: #a3c8e8;
+            --text-dark: #1a1a1a;
+            --text: #333333;
+            --text-light: #666666;
+            --white: #ffffff;
+            --shadow-sm: 0 2px 8px rgba(0,0,0,0.08);
+            --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+            --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+            --radius-sm: 6px;
+            --radius-md: 12px;
+            --radius-lg: 20px;
+            --transition: 0.3s ease;
+        }
+
+        html { scroll-behavior: smooth; }
+
+        body {
+            font-family: 'Source Sans 3', 'Segoe UI', sans-serif;
+            color: var(--text);
+            background: var(--cream);
+            line-height: 1.7;
+            overflow-x: hidden;
+        }
+
+        h1, h2, h3, h4 {
+            font-family: 'Playfair Display', Georgia, serif;
+            color: var(--primary-dark);
+            line-height: 1.3;
+        }
+
+        .mono {
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        a { color: var(--primary); text-decoration: none; transition: color var(--transition); }
+        a:hover { color: var(--accent); }
+
+        img { max-width: 100%; height: auto; display: block; }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 24px;
+        }
+
+        /* ===== NAVBAR ===== */
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            background: rgba(45, 58, 45, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 0 24px;
+            transition: box-shadow var(--transition);
+        }
+
+        .navbar.scrolled {
+            box-shadow: var(--shadow-md);
+        }
+
+        .navbar-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            height: 64px;
+        }
+
+        .navbar-brand {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            color: var(--cream);
+            letter-spacing: 0.5px;
+        }
+
+        .navbar-links {
+            display: flex;
+            gap: 28px;
+            list-style: none;
+            align-items: center;
+        }
+
+        .navbar-links a {
+            color: var(--cream-dark);
+            font-size: 0.9rem;
+            font-weight: 400;
+            letter-spacing: 0.3px;
+            position: relative;
+            padding: 4px 0;
+        }
+
+        .navbar-links a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 2px;
+            background: var(--accent);
+            transition: width var(--transition);
+        }
+
+        .navbar-links a:hover { color: var(--white); }
+        .navbar-links a:hover::after { width: 100%; }
+
+        .btn-login {
+            background: var(--accent);
+            color: var(--white) !important;
+            padding: 8px 20px;
+            border-radius: var(--radius-sm);
+            font-weight: 600;
+            font-size: 0.85rem;
+            transition: background var(--transition), transform var(--transition);
+        }
+
+        .btn-login:hover {
+            background: var(--accent-light);
+            transform: translateY(-1px);
+        }
+
+        .btn-login::after { display: none !important; }
+
+        /* Hamburger */
+        .hamburger {
+            display: none;
+            flex-direction: column;
+            gap: 5px;
+            cursor: pointer;
+            padding: 8px;
+            background: none;
+            border: none;
+        }
+
+        .hamburger span {
+            width: 24px;
+            height: 2px;
+            background: var(--cream);
+            transition: var(--transition);
+            display: block;
+        }
+
+        /* ===== HERO ===== */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            background: linear-gradient(135deg, var(--primary-dark) 0%, #1a3a1a 40%, #2d4a2d 100%);
+            position: relative;
+            overflow: hidden;
+            padding: 120px 24px 80px;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(ellipse at 30% 50%, rgba(74, 124, 89, 0.3) 0%, transparent 60%),
+                        radial-gradient(ellipse at 70% 80%, rgba(196, 154, 108, 0.15) 0%, transparent 50%);
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 900px;
+        }
+
+        .hero-badge {
+            display: inline-block;
+            background: rgba(196, 154, 108, 0.2);
+            border: 1px solid rgba(196, 154, 108, 0.4);
+            color: var(--accent-light);
+            padding: 8px 24px;
+            border-radius: 50px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 32px;
+        }
+
+        .hero h1 {
+            font-size: 3.5rem;
+            color: var(--cream);
+            margin-bottom: 20px;
+            font-weight: 700;
+        }
+
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--cream-dark);
+            max-width: 700px;
+            margin: 0 auto 48px;
+            opacity: 0.9;
+            font-weight: 300;
+        }
+
+        .hero-stats {
+            display: flex;
+            justify-content: center;
+            gap: 48px;
+            flex-wrap: wrap;
+        }
+
+        .hero-stat {
+            text-align: center;
+        }
+
+        .hero-stat-number {
+            font-family: 'Playfair Display', serif;
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-light);
+            display: block;
+        }
+
+        .hero-stat-label {
+            font-size: 0.85rem;
+            color: var(--cream-dark);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 4px;
+        }
+
+        /* ===== SECTIONS ===== */
+        section {
+            padding: 100px 0;
+        }
+
+        section:nth-child(even) {
+            background: var(--white);
+        }
+
+        .section-header {
+            text-align: center;
+            margin-bottom: 64px;
+        }
+
+        .section-header h2 {
+            font-size: 2.4rem;
+            margin-bottom: 16px;
+        }
+
+        .section-header p {
+            font-size: 1.1rem;
+            color: var(--text-light);
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .section-divider {
+            width: 60px;
+            height: 3px;
+            background: var(--accent);
+            margin: 16px auto 0;
+            border-radius: 2px;
+        }
+
+        /* ===== ABOUT / PROJECT ===== */
+        .goals-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 28px;
+        }
+
+        .goal-card {
+            background: var(--white);
+            border-radius: var(--radius-md);
+            padding: 32px;
+            box-shadow: var(--shadow-sm);
+            border-left: 4px solid var(--primary);
+            transition: transform var(--transition), box-shadow var(--transition);
+        }
+
+        section:nth-child(even) .goal-card {
+            background: var(--cream);
+        }
+
+        .goal-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .goal-icon {
+            font-size: 2rem;
+            margin-bottom: 16px;
+            display: block;
+        }
+
+        .goal-card h3 {
+            font-size: 1.15rem;
+            margin-bottom: 10px;
+        }
+
+        .goal-card p {
+            font-size: 0.95rem;
+            color: var(--text-light);
+        }
+
+        /* ===== TEAM ===== */
+        .team-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 24px;
+        }
+
+        .team-card {
+            background: var(--cream);
+            border-radius: var(--radius-md);
+            padding: 32px 24px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            transition: transform var(--transition), box-shadow var(--transition);
+        }
+
+        .team-card:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .team-avatar {
+            width: 72px;
+            height: 72px;
+            border-radius: 50%;
+            margin: 0 auto 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.8rem;
+        }
+
+        .team-card h3 {
+            font-size: 1.05rem;
+            margin-bottom: 6px;
+        }
+
+        .team-card .role {
+            font-size: 0.85rem;
+            color: var(--text-light);
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 10px;
+        }
+
+        .team-card p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        /* ===== FARM ===== */
+        .farm-layout {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: center;
+        }
+
+        .farm-info h3 {
+            font-size: 1.4rem;
+            margin-bottom: 16px;
+        }
+
+        .farm-info p {
+            margin-bottom: 16px;
+            font-size: 1rem;
+        }
+
+        .farm-stats-row {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+            margin-top: 28px;
+        }
+
+        .farm-stat-box {
+            text-align: center;
+            padding: 20px 12px;
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-sm);
+        }
+
+        section:nth-child(even) .farm-stat-box {
+            background: var(--cream);
+        }
+
+        .farm-stat-box .number {
+            font-family: 'Playfair Display', serif;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--primary);
+            display: block;
+        }
+
+        .farm-stat-box .label {
+            font-size: 0.8rem;
+            color: var(--text-light);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .farm-image-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        .farm-image-grid img {
+            border-radius: var(--radius-sm);
+            width: 100%;
+            height: 180px;
+            object-fit: cover;
+            cursor: pointer;
+            transition: transform var(--transition);
+        }
+
+        .farm-image-grid img:hover {
+            transform: scale(1.03);
+        }
+
+        .farm-image-grid img:first-child {
+            grid-column: 1 / -1;
+            height: 220px;
+        }
+
+        /* ===== SEASON BADGES ===== */
+        .season-cards {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+            margin-top: 32px;
+        }
+
+        .season-card {
+            padding: 28px;
+            border-radius: var(--radius-md);
+            box-shadow: var(--shadow-sm);
+        }
+
+        .season-card.summer {
+            background: linear-gradient(135deg, #e8f5e9, #c8e6c9);
+            border-left: 4px solid #4caf50;
+        }
+
+        .season-card.winter {
+            background: linear-gradient(135deg, #e3f2fd, #bbdefb);
+            border-left: 4px solid #2196f3;
+        }
+
+        .season-card h4 {
+            font-size: 1.1rem;
+            margin-bottom: 10px;
+        }
+
+        .season-card p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+        }
+
+        /* ===== TECHNOLOGY ===== */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 32px;
+        }
+
+        .tech-card {
+            background: var(--cream);
+            border-radius: var(--radius-md);
+            padding: 36px 28px;
+            text-align: center;
+            box-shadow: var(--shadow-sm);
+            transition: transform var(--transition), box-shadow var(--transition);
+            border-top: 4px solid var(--primary);
+        }
+
+        section:nth-child(even) .tech-card {
+            border-top-color: var(--sky);
+        }
+
+        .tech-card:hover {
+            transform: translateY(-6px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .tech-icon {
+            font-size: 3rem;
+            margin-bottom: 20px;
+            display: block;
+        }
+
+        .tech-card h3 {
+            font-size: 1.2rem;
+            margin-bottom: 12px;
+        }
+
+        .tech-card p {
+            font-size: 0.9rem;
+            color: var(--text-light);
+            margin-bottom: 16px;
+        }
+
+        .tech-specs {
+            list-style: none;
+            text-align: left;
+        }
+
+        .tech-specs li {
+            font-size: 0.85rem;
+            padding: 6px 0;
+            border-bottom: 1px solid rgba(0,0,0,0.06);
+            color: var(--text-light);
+        }
+
+        .tech-specs li:last-child { border-bottom: none; }
+
+        .tech-specs .spec-label {
+            font-weight: 600;
+            color: var(--text);
+        }
+
+        /* ===== MONITORING ===== */
+        .pipeline-steps {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .pipeline-step {
+            display: flex;
+            gap: 24px;
+            align-items: flex-start;
+            position: relative;
+            padding-bottom: 40px;
+        }
+
+        .pipeline-step:last-child { padding-bottom: 0; }
+
+        .pipeline-marker {
+            width: 48px;
+            height: 48px;
+            min-width: 48px;
+            border-radius: 50%;
+            background: var(--primary);
+            color: var(--white);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: 'Playfair Display', serif;
+            font-size: 1.2rem;
+            font-weight: 700;
+            position: relative;
+            z-index: 1;
+        }
+
+        .pipeline-step:not(:last-child) .pipeline-marker::after {
+            content: '';
+            position: absolute;
+            top: 48px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: calc(100% + 40px - 48px);
+            background: linear-gradient(to bottom, var(--primary), var(--primary-light));
+        }
+
+        .pipeline-content {
+            flex: 1;
+            background: var(--white);
+            border-radius: var(--radius-md);
+            padding: 24px;
+            box-shadow: var(--shadow-sm);
+        }
+
+        section:nth-child(even) .pipeline-content {
+            background: var(--cream);
+        }
+
+        .pipeline-content h3 {
+            font-size: 1.1rem;
+            margin-bottom: 8px;
+        }
+
+        .pipeline-content p {
+            font-size: 0.92rem;
+            color: var(--text-light);
+        }
+
+        /* ===== MAP ===== */
+        #map-container {
+            border-radius: var(--radius-md);
+            overflow: hidden;
+            box-shadow: var(--shadow-md);
+            height: 500px;
+            margin-top: 32px;
+        }
+
+        .map-legend {
+            display: flex;
+            justify-content: center;
+            gap: 32px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 0.9rem;
+        }
+
+        .legend-dot {
+            width: 16px;
+            height: 16px;
+            border-radius: 3px;
+        }
+
+        /* ===== GALLERY ===== */
+        .gallery-tabs {
+            display: flex;
+            justify-content: center;
+            gap: 12px;
+            margin-bottom: 40px;
+            flex-wrap: wrap;
+        }
+
+        .gallery-tab {
+            padding: 10px 24px;
+            border-radius: 50px;
+            border: 2px solid var(--primary-light);
+            background: transparent;
+            color: var(--primary);
+            font-family: 'Source Sans 3', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all var(--transition);
+        }
+
+        .gallery-tab:hover,
+        .gallery-tab.active {
+            background: var(--primary);
+            color: var(--white);
+            border-color: var(--primary);
+        }
+
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: 16px;
+        }
+
+        .gallery-item {
+            border-radius: var(--radius-sm);
+            overflow: hidden;
+            box-shadow: var(--shadow-sm);
+            cursor: pointer;
+            transition: transform var(--transition), box-shadow var(--transition);
+            position: relative;
+        }
+
+        .gallery-item:hover {
+            transform: translateY(-4px);
+            box-shadow: var(--shadow-md);
+        }
+
+        .gallery-item img {
+            width: 100%;
+            height: 220px;
+            object-fit: cover;
+            transition: transform var(--transition);
+        }
+
+        .gallery-item:hover img {
+            transform: scale(1.05);
+        }
+
+        .gallery-item .caption {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(transparent, rgba(0,0,0,0.7));
+            color: var(--white);
+            padding: 32px 16px 12px;
+            font-size: 0.85rem;
+            font-weight: 600;
+        }
+
+        .gallery-item[hidden] { display: none; }
+
+        /* ===== LIGHTBOX ===== */
+        .lightbox {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0,0,0,0.9);
+            z-index: 2000;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+        }
+
+        .lightbox.active { display: flex; }
+
+        .lightbox img {
+            max-width: 90%;
+            max-height: 85vh;
+            border-radius: var(--radius-sm);
+            box-shadow: var(--shadow-lg);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 20px;
+            right: 30px;
+            color: var(--white);
+            font-size: 2rem;
+            cursor: pointer;
+            background: none;
+            border: none;
+            opacity: 0.8;
+            transition: opacity var(--transition);
+        }
+
+        .lightbox-close:hover { opacity: 1; }
+
+        .lightbox-caption {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            right: 0;
+            text-align: center;
+            color: var(--white);
+            font-size: 1rem;
+            opacity: 0.9;
+        }
+
+        /* ===== TIMELINE ===== */
+        .timeline {
+            position: relative;
+            max-width: 800px;
+            margin: 0 auto;
+        }
+
+        .timeline::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 3px;
+            height: 100%;
+            background: linear-gradient(to bottom, var(--primary), var(--accent));
+            border-radius: 2px;
+        }
+
+        .timeline-item {
+            display: flex;
+            margin-bottom: 40px;
+            position: relative;
+        }
+
+        .timeline-item:nth-child(odd) {
+            justify-content: flex-start;
+            padding-right: calc(50% + 30px);
+            text-align: right;
+        }
+
+        .timeline-item:nth-child(even) {
+            justify-content: flex-end;
+            padding-left: calc(50% + 30px);
+        }
+
+        .timeline-dot {
+            position: absolute;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--accent);
+            border: 3px solid var(--cream);
+            box-shadow: var(--shadow-sm);
+            z-index: 1;
+        }
+
+        section:nth-child(even) .timeline-dot {
+            border-color: var(--white);
+        }
+
+        .timeline-card {
+            background: var(--white);
+            border-radius: var(--radius-sm);
+            padding: 20px;
+            box-shadow: var(--shadow-sm);
+            max-width: 340px;
+        }
+
+        section:nth-child(even) .timeline-card {
+            background: var(--cream);
+        }
+
+        .timeline-date {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--accent);
+            font-weight: 500;
+            margin-bottom: 6px;
+        }
+
+        .timeline-card h4 {
+            font-size: 1rem;
+            margin-bottom: 6px;
+        }
+
+        .timeline-card p {
+            font-size: 0.85rem;
+            color: var(--text-light);
+        }
+
+        /* ===== CONTACT ===== */
+        .contact-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 48px;
+            align-items: center;
+        }
+
+        .contact-info h3 {
+            font-size: 1.4rem;
+            margin-bottom: 20px;
+        }
+
+        .contact-item {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            margin-bottom: 20px;
+        }
+
+        .contact-icon {
+            font-size: 1.5rem;
+            min-width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--primary);
+            color: var(--white);
+            border-radius: 50%;
+            font-size: 1rem;
+        }
+
+        .contact-item p {
+            font-size: 0.95rem;
+        }
+
+        .contact-item strong {
+            display: block;
+            color: var(--primary-dark);
+        }
+
+        .contact-cta {
+            background: var(--primary-dark);
+            border-radius: var(--radius-md);
+            padding: 48px;
+            text-align: center;
+            color: var(--cream);
+        }
+
+        .contact-cta h3 {
+            color: var(--cream);
+            font-size: 1.6rem;
+            margin-bottom: 16px;
+        }
+
+        .contact-cta p {
+            margin-bottom: 28px;
+            opacity: 0.9;
+        }
+
+        .btn-primary {
+            display: inline-block;
+            background: var(--accent);
+            color: var(--white);
+            padding: 14px 36px;
+            border-radius: var(--radius-sm);
+            font-size: 1rem;
+            font-weight: 600;
+            transition: background var(--transition), transform var(--transition);
+        }
+
+        .btn-primary:hover {
+            background: var(--accent-light);
+            color: var(--white);
+            transform: translateY(-2px);
+        }
+
+        /* ===== FOOTER ===== */
+        .footer {
+            background: var(--primary-dark);
+            color: var(--cream-dark);
+            padding: 40px 0;
+            text-align: center;
+        }
+
+        .footer p {
+            font-size: 0.85rem;
+            opacity: 0.7;
+        }
+
+        .footer .program {
+            font-size: 0.8rem;
+            opacity: 0.5;
+            margin-top: 8px;
+        }
+
+        /* ===== SCROLL ANIMATIONS ===== */
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.8s ease, transform 0.8s ease;
+        }
+
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ===== RESPONSIVE ===== */
+        @media (max-width: 768px) {
+            .hamburger { display: flex; }
+
+            .navbar-links {
+                display: none;
+                position: absolute;
+                top: 64px;
+                left: 0;
+                right: 0;
+                background: rgba(45, 58, 45, 0.98);
+                flex-direction: column;
+                padding: 20px;
+                gap: 16px;
+            }
+
+            .navbar-links.open { display: flex; }
+
+            .hero h1 { font-size: 2.2rem; }
+            .hero-subtitle { font-size: 1rem; }
+            .hero-stats { gap: 24px; }
+            .hero-stat-number { font-size: 1.8rem; }
+
+            section { padding: 60px 0; }
+            .section-header h2 { font-size: 1.8rem; }
+
+            .farm-layout { grid-template-columns: 1fr; }
+            .farm-image-grid { order: -1; }
+            .season-cards { grid-template-columns: 1fr; }
+
+            .tech-grid { grid-template-columns: 1fr; }
+
+            .pipeline-step { gap: 16px; }
+            .pipeline-marker { width: 36px; height: 36px; min-width: 36px; font-size: 0.9rem; }
+
+            .timeline::before { left: 20px; }
+            .timeline-item:nth-child(odd),
+            .timeline-item:nth-child(even) {
+                padding-left: 50px;
+                padding-right: 0;
+                text-align: left;
+                justify-content: flex-start;
+            }
+            .timeline-dot { left: 20px; }
+
+            .contact-grid { grid-template-columns: 1fr; }
+
+            .gallery-grid { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- ===== NAVBAR ===== -->
+    <nav class="navbar" id="navbar">
+        <div class="navbar-inner">
+            <a href="#hero" class="navbar-brand">Inteligentni pastvina</a>
+            <button class="hamburger" id="hamburger" aria-label="Menu">
+                <span></span><span></span><span></span>
+            </button>
+            <ul class="navbar-links" id="navLinks">
+                <li><a href="#projekt">O projektu</a></li>
+                <li><a href="#tym">Tym</a></li>
+                <li><a href="#farma">Farma</a></li>
+                <li><a href="#technologie">Technologie</a></li>
+                <li><a href="#mapa">Mapa</a></li>
+                <li><a href="#galerie">Galerie</a></li>
+                <li><a href="#harmonogram">Harmonogram</a></li>
+                <li><a href="login.html" class="btn-login">Prihlaseni</a></li>
+            </ul>
+        </div>
+    </nav>
+
+    <!-- ===== HERO ===== -->
+    <section class="hero" id="hero">
+        <div class="hero-content">
+            <div class="hero-badge">2. vyzva EIP MZe &mdash; Operacni skupiny 53.77</div>
+            <h1>Inteligentni pastvina</h1>
+            <p class="hero-subtitle">
+                Monitoring zdravi a chovani skotu v reálném case pomoci GPS, akcelerometru a AI kamer na Ekofarme Pejcoch Rumburk
+            </p>
+            <div class="hero-stats">
+                <div class="hero-stat">
+                    <span class="hero-stat-number">66</span>
+                    <span class="hero-stat-label">Krav</span>
+                </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">3</span>
+                    <span class="hero-stat-label">Byci</span>
+                </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">9</span>
+                    <span class="hero-stat-label">Pastvin</span>
+                </div>
+                <div class="hero-stat">
+                    <span class="hero-stat-number">24/7</span>
+                    <span class="hero-stat-label">Monitoring</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== O PROJEKTU ===== -->
+    <section id="projekt">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>O projektu</h2>
+                <p>Inovativni pristup k monitoringu chovaneho skotu s vyuzitim modernich IoT technologii</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="goals-grid">
+                <div class="goal-card reveal">
+                    <span class="goal-icon">&#x1F4E1;</span>
+                    <h3>Reprodukce a rije</h3>
+                    <p>Detekce rije na zaklade zmen pohybovych vzorcu, narustu aktivity a specifickeho chovani. Optimalizace pripousteni a zvyseni reprodukcni uspesnosti stada.</p>
+                </div>
+                <div class="goal-card reveal">
+                    <span class="goal-icon">&#x1F404;</span>
+                    <h3>Predikce teleni</h3>
+                    <p>Vcasna identifikace blizicho se porodu na zaklade zmeny chovani - izolace od stada, neklid, zmena polohy. Snizeni ztrát novorozenych telat.</p>
+                </div>
+                <div class="goal-card reveal">
+                    <span class="goal-icon">&#x26A0;</span>
+                    <h3>Detekce anomalii</h3>
+                    <p>Automaticka identifikace abnormalniho chovani - kulhani, apaticke stavy, oddeleni od stada. Vcasny zasah veterinare pri zdravotnich problemech.</p>
+                </div>
+                <div class="goal-card reveal">
+                    <span class="goal-icon">&#x1F512;</span>
+                    <h3>Bezpecnost a ochrana</h3>
+                    <p>Monitoring perimetru arealu pomoci AI kamer s detekcí osob a vozidel. Okamzite alertovani pri neautorizovanem vstupu na zimoviste.</p>
+                </div>
+                <div class="goal-card reveal">
+                    <span class="goal-icon">&#x1F4CA;</span>
+                    <h3>Datova analyza</h3>
+                    <p>Sber a analyza dat z GPS obojku (1 Hz), akcelerometru, AI kamer a podnich senzoru. Fuze dat pro komplexni obraz zdravi a chovani kazdeho kusu.</p>
+                </div>
+                <div class="goal-card reveal">
+                    <span class="goal-icon">&#x1F331;</span>
+                    <h3>Precizni pastva</h3>
+                    <p>Optimalizace vyuziti pastevnich ploch na zaklade GPS dat o pohybu a distribuci stada. Prevence prezdraveni a poduzivani jednotlivych zon.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== TYM ===== -->
+    <section id="tym">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Operacni skupina</h2>
+                <p>Multidisciplinarni tym odborníku propojujici praxi, technologie a vedu</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="team-grid">
+                <div class="team-card reveal">
+                    <div class="team-avatar" style="background: #e8f5e9;">&#x1F33E;</div>
+                    <h3>Ekofarma Pejcoch</h3>
+                    <div class="role">Zadatel</div>
+                    <p>Ekologicka farma v Rumburku. Celorocni venkovni chov 66 krav a 3 byku bez vazneho ustajeni.</p>
+                </div>
+                <div class="team-card reveal">
+                    <div class="team-avatar" style="background: #e3f2fd;">&#x1F4E1;</div>
+                    <h3>Ceske radiokomunikace</h3>
+                    <div class="role">Innovation of Things</div>
+                    <p>Realizacni skupina z utvaru Innovation of Things. IoT infrastruktura, konektivita a datova architektura.</p>
+                </div>
+                <div class="team-card reveal">
+                    <div class="team-avatar" style="background: #fff3e0;">&#x1F4BB;</div>
+                    <h3>Quanti</h3>
+                    <div class="role">Vyvojari</div>
+                    <p>Skupina vyvojaru. Softwarove reseni, analyticke nastroje, webova vizualizace a datove zpracovani.</p>
+                </div>
+                <div class="team-card reveal">
+                    <div class="team-avatar" style="background: #f3e5f5;">&#x1F52C;</div>
+                    <h3>CZU / VU Uhrineves</h3>
+                    <div class="role">Vedecky partner</div>
+                    <p>Ceska zemedelska univerzita a Vyzkumny ustav zivocisne vyroby. Odborne vedeni, metodika, analyza dat.</p>
+                </div>
+                <div class="team-card reveal">
+                    <div class="team-avatar" style="background: #e0f2f1;">&#x1F4D1;</div>
+                    <h3>Komora zemedelskych poradcu</h3>
+                    <div class="role">Poradenstvi</div>
+                    <p>Zastupci komory zemedelskych poradcu. Prenos vysledku do praxe, diseminace a poradenska cinnost.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FARMA ===== -->
+    <section id="farma">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Ekofarma Pejcoch Rumburk</h2>
+                <p>Ekologicky chov skotu v Sluzskem udoli na severu Cech</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="farm-layout reveal">
+                <div class="farm-info">
+                    <h3>Celorocni venkovni chov</h3>
+                    <p>
+                        Ekofarma Pejcoch hospodari v Rumburku a okolních obcich. Stado tvori 66 krav a 3 plemenni byci chovani celorocne ve venkovnich podminkach bez vazneho ustajeni.
+                    </p>
+                    <div class="season-cards">
+                        <div class="season-card summer">
+                            <h4>&#x2600;&#xFE0F; Letni sezona</h4>
+                            <p>Stado rozdeleno do 3 skupin na oddelených pastvínach. Kazda skupina s 1 bykem pro prirozene pripousteni. Rotace pastvin dle stavu porostu.</p>
+                        </div>
+                        <div class="season-card winter">
+                            <h4>&#x2744;&#xFE0F; Zimni sezona</h4>
+                            <p>Vsechna zvirata soustredena na zimovisti o rozloze cca 1 ha. Pristresek, krmivo (seno, senaz), mineralni lizy. Nepretrzity monitoring.</p>
+                        </div>
+                    </div>
+                    <div class="farm-stats-row">
+                        <div class="farm-stat-box">
+                            <span class="number">66</span>
+                            <span class="label">Krav</span>
+                        </div>
+                        <div class="farm-stat-box">
+                            <span class="number">3</span>
+                            <span class="label">Byci</span>
+                        </div>
+                        <div class="farm-stat-box">
+                            <span class="number">~1 ha</span>
+                            <span class="label">Zimoviste</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="farm-image-grid">
+                    <img src="assets/images/letni-pastvina/20250522_111022.jpg" alt="Letni pastvina" onclick="openLightbox(this)">
+                    <img src="assets/images/zimoviste/20250227_122033.jpg" alt="Zimoviste" onclick="openLightbox(this)">
+                    <img src="assets/images/zimoviste/20250227_122042(0).jpg" alt="Zimoviste - stado" onclick="openLightbox(this)">
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== TECHNOLOGIE ===== -->
+    <section id="technologie">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Technologie</h2>
+                <p>Trívrstva monitorovaci architektura: obojky, kamery, server</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="tech-grid">
+                <div class="tech-card reveal">
+                    <span class="tech-icon">&#x1F4F6;</span>
+                    <h3>GPS + akcelerometr obojky</h3>
+                    <p>Teltonika FMB920 s GPS a triosalovym akcelerometrem na kazdem kusu</p>
+                    <ul class="tech-specs">
+                        <li><span class="spec-label">Vzorkovani:</span> 1 Hz (akcelerometr)</li>
+                        <li><span class="spec-label">Upload:</span> kazdych 30 minut</li>
+                        <li><span class="spec-label">GPS presnost:</span> 2-5 m (otevr. teren)</li>
+                        <li><span class="spec-label">Napajeni:</span> solarni panel + LiPo</li>
+                        <li><span class="spec-label">Konektivita:</span> GSM/GPRS</li>
+                    </ul>
+                </div>
+                <div class="tech-card reveal">
+                    <span class="tech-icon">&#x1F4F7;</span>
+                    <h3>AI kamery (Coral/Frigate)</h3>
+                    <p>4 kamery na perimetru zimoviste s detekcí objektu pomoci Google Coral TPU</p>
+                    <ul class="tech-specs">
+                        <li><span class="spec-label">Pocet:</span> 4 kamery</li>
+                        <li><span class="spec-label">AI engine:</span> Frigate NVR + Coral</li>
+                        <li><span class="spec-label">Detekce:</span> krava, osoba, vozidlo</li>
+                        <li><span class="spec-label">FPS:</span> 5 fps detekcni</li>
+                        <li><span class="spec-label">Noční vidění:</span> IR LED</li>
+                    </ul>
+                </div>
+                <div class="tech-card reveal">
+                    <span class="tech-icon">&#x1F5A5;</span>
+                    <h3>Serverova infrastruktura</h3>
+                    <p>Lokální server na farme pro sber, zpracovani a analyzu vsech datovych proudu</p>
+                    <ul class="tech-specs">
+                        <li><span class="spec-label">Platforma:</span> Linux server</li>
+                        <li><span class="spec-label">Uloziste:</span> NAS Synology</li>
+                        <li><span class="spec-label">Zpracovani:</span> Python + Node.js</li>
+                        <li><span class="spec-label">Vizualizace:</span> Webove dashboardy</li>
+                        <li><span class="spec-label">Konektivita:</span> Optika + GSM backup</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== MONITORING ===== -->
+    <section id="monitoring">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Monitoring a analyza dat</h2>
+                <p>Od surových senzorových dat ke klasifikaci chovani a alertum</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="pipeline-steps">
+                <div class="pipeline-step reveal">
+                    <div class="pipeline-marker">1</div>
+                    <div class="pipeline-content">
+                        <h3>GPS filtrace a validace</h3>
+                        <p>Syrova GPS data z obojku prochazi filtraci: odstranení bodu s nizkou presnosti (HDOP &gt; 5), outlier detekcí (rychlost &gt; 25 km/h), interpolaci mezer. Vysledkem je cistá GPS trajektorie kazdeho kusu.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step reveal">
+                    <div class="pipeline-marker">2</div>
+                    <div class="pipeline-content">
+                        <h3>Kalibrace akcelerometru</h3>
+                        <p>Trojosla data (X, Y, Z) se kalibruji na pozici obojku na krku zvirete. Vypocet sklonu (tilt), orientace a dynamických zrychleni pro klasifikaci postury (stání/lehání) a pohybu.</p>
+                    </div>
+                </div>
+                <div class="pipeline-step reveal">
+                    <div class="pipeline-marker">3</div>
+                    <div class="pipeline-content">
+                        <h3>Klasifikace chovani</h3>
+                        <p>Fuze GPS + akcelerometr pro klasifikaci: stání, lehání, chuze, beh, paseni. Krizova validace s prahovymi hodnotami i strojovym ucenim. Zonova korelace (krava leží pouze na sene v zone A).</p>
+                    </div>
+                </div>
+                <div class="pipeline-step reveal">
+                    <div class="pipeline-marker">4</div>
+                    <div class="pipeline-content">
+                        <h3>AI zpracovani kamer</h3>
+                        <p>Frigate NVR s Coral TPU detekuje objekty v reálném case. Pocitani zvírat v jednotlivych zonach, sledovani osob, detekce neobvyklych situaci (zvire na zemi, predator).</p>
+                    </div>
+                </div>
+                <div class="pipeline-step reveal">
+                    <div class="pipeline-marker">5</div>
+                    <div class="pipeline-content">
+                        <h3>Datova fuze a alerty</h3>
+                        <p>Vsechny datove proudy se slévají do jednotneho casoveho modelu. Automaticka detekce anomalii spousti alerty: podezreni na riji, blizici se teleni, zdravotni problemy, naruseni bezpecnosti.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== MAPA ===== -->
+    <section id="mapa">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Mapa arealu</h2>
+                <p>Zimoviste Ekofarmy Pejcoch s vyznacenymi zonami managementu stada</p>
+                <div class="section-divider"></div>
+            </div>
+            <div id="map-container" class="reveal"></div>
+            <div class="map-legend reveal">
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: rgba(33, 150, 243, 0.6); border: 2px solid #1565c0;"></div>
+                    <span>Perimetr ohrazení</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: rgba(76, 175, 80, 0.5); border: 2px solid #2e7d32;"></div>
+                    <span>Zelene zony (bezpecne)</span>
+                </div>
+                <div class="legend-item">
+                    <div class="legend-dot" style="background: rgba(244, 67, 54, 0.4); border: 2px solid #c62828;"></div>
+                    <span>Cervene zony (rizikove)</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== GALERIE ===== -->
+    <section id="galerie">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Galerie</h2>
+                <p>Fotodokumentace projektu - od vyroby obojku po nasazeni v terenu</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="gallery-tabs reveal">
+                <button class="gallery-tab active" data-filter="all">Vse</button>
+                <button class="gallery-tab" data-filter="letni-pastvina">Letni pastvina</button>
+                <button class="gallery-tab" data-filter="obojek">Obojky</button>
+                <button class="gallery-tab" data-filter="kamery">Kamery</button>
+                <button class="gallery-tab" data-filter="servrovna">Servrovna</button>
+                <button class="gallery-tab" data-filter="vyroba-obojku">Vyroba obojku</button>
+                <button class="gallery-tab" data-filter="zimoviste">Zimoviste</button>
+            </div>
+            <div class="gallery-grid" id="galleryGrid">
+                <!-- Letni pastvina -->
+                <div class="gallery-item" data-category="letni-pastvina" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/letni-pastvina/20250522_111022.jpg" alt="Letni pastvina - stado na pastve">
+                    <div class="caption">Stado na letni pastve</div>
+                </div>
+                <div class="gallery-item" data-category="letni-pastvina" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/letni-pastvina/20250522_111028.jpg" alt="Letni pastvina - pastva">
+                    <div class="caption">Pastva - kveten 2025</div>
+                </div>
+                <div class="gallery-item" data-category="letni-pastvina" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/letni-pastvina/20250522_111042.jpg" alt="Letni pastvina - pohled">
+                    <div class="caption">Pohled na pastvinu</div>
+                </div>
+                <div class="gallery-item" data-category="letni-pastvina" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/letni-pastvina/20250522_111044.jpg" alt="Letni pastvina - krajina">
+                    <div class="caption">Pastvina v krajine</div>
+                </div>
+                <div class="gallery-item" data-category="letni-pastvina" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/letni-pastvina/20250522_111046.jpg" alt="Letni pastvina - detail">
+                    <div class="caption">Detail pastvy</div>
+                </div>
+
+                <!-- Obojky -->
+                <div class="gallery-item" data-category="obojek" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/obojek/20250509_090814.jpg" alt="GPS obojek na krávě">
+                    <div class="caption">GPS obojek na krave</div>
+                </div>
+                <div class="gallery-item" data-category="obojek" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/obojek/20250509_090909.jpg" alt="GPS obojek - detail">
+                    <div class="caption">Detail obojku</div>
+                </div>
+                <div class="gallery-item" data-category="obojek" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/obojek/IMG_20250822_111207.jpg" alt="Obojek na zvířeti">
+                    <div class="caption">Obojek na zvireti</div>
+                </div>
+                <div class="gallery-item" data-category="obojek" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/obojek/IMG_20250822_111209.jpg" alt="Obojek GPS tracker">
+                    <div class="caption">GPS tracker obojek</div>
+                </div>
+                <div class="gallery-item" data-category="obojek" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/obojek/IMG_20250822_143913.jpg" alt="Obojek nasazení">
+                    <div class="caption">Nasazeni obojku</div>
+                </div>
+
+                <!-- Kamery -->
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/Kamera č.1.png" alt="Kamera 1 - pohled">
+                    <div class="caption">Kamera 1 - pohled</div>
+                </div>
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/Kamera č.2.png" alt="Kamera 2 - pohled">
+                    <div class="caption">Kamera 2 - pohled</div>
+                </div>
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/Kamera č.3.png" alt="Kamera 3 - pohled">
+                    <div class="caption">Kamera 3 - pohled</div>
+                </div>
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/Kamera č.4.png" alt="Kamera 4 - pohled">
+                    <div class="caption">Kamera 4 - pohled</div>
+                </div>
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/Detekce krav kamera 2.png" alt="AI detekce krav">
+                    <div class="caption">AI detekce krav - Kamera 2</div>
+                </div>
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/Detekce krav kamera 3.png" alt="AI detekce krav">
+                    <div class="caption">AI detekce krav - Kamera 3</div>
+                </div>
+                <div class="gallery-item" data-category="kamery" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/kamery/zachycení osoby na zimovišti.png" alt="Detekce osoby">
+                    <div class="caption">Detekce osoby na zimovisti</div>
+                </div>
+
+                <!-- Servrovna -->
+                <div class="gallery-item" data-category="servrovna" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/servrovna/IMG_20251020_104306.jpg" alt="Servrovna - rack">
+                    <div class="caption">Serverovy rack na farme</div>
+                </div>
+                <div class="gallery-item" data-category="servrovna" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/servrovna/IMG_20251020_110448.jpg" alt="Servrovna - detail">
+                    <div class="caption">Detail servrovny</div>
+                </div>
+                <div class="gallery-item" data-category="servrovna" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/servrovna/IMG_20251020_112022.jpg" alt="Servrovna - konektivita">
+                    <div class="caption">Sitova infrastruktura</div>
+                </div>
+                <div class="gallery-item" data-category="servrovna" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/servrovna/IMG_20251020_112025.jpg" alt="Servrovna - kabeláž">
+                    <div class="caption">Kabelaz a pripojeni</div>
+                </div>
+                <div class="gallery-item" data-category="servrovna" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/servrovna/IMG_20251020_112641.jpg" alt="Servrovna - celkový pohled">
+                    <div class="caption">Celkovy pohled na servrovnu</div>
+                </div>
+                <div class="gallery-item" data-category="servrovna" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/servrovna/sklad a servrovna_ekofarma zimoviště.jpg" alt="Sklad a servrovna">
+                    <div class="caption">Sklad a servrovna na zimovisti</div>
+                </div>
+
+                <!-- Vyroba obojku -->
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/20250704_094119.jpg" alt="Výroba obojků - komponenty">
+                    <div class="caption">Komponenty obojku</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/20250704_094140.jpg" alt="Výroba obojků - sestava">
+                    <div class="caption">Sestavovani obojku</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/20250704_094143.jpg" alt="Výroba obojků - detail">
+                    <div class="caption">Detail montaze</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/20250704_094145.jpg" alt="Výroba obojků - elektronika">
+                    <div class="caption">Elektronika obojku</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/IMG_20250801_085142.jpg" alt="Výroba - solární panel">
+                    <div class="caption">Solarni panel</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/IMG_20250815_083214.jpg" alt="Výroba - finální produkt">
+                    <div class="caption">Hotovy obojek</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/IMG_20250815_083255.jpg" alt="Výroba - série">
+                    <div class="caption">Serie obojku</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/IMG_20250815_083304.jpg" alt="Výroba - testování">
+                    <div class="caption">Testovani obojku</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/IMG_20250815_083331.jpg" alt="Výroba - baterie">
+                    <div class="caption">Bateriovy modul</div>
+                </div>
+                <div class="gallery-item" data-category="vyroba-obojku" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/vyroba-obojku/IMG_20250815_083344.jpg" alt="Výroba - kompletace">
+                    <div class="caption">Kompletace obojku</div>
+                </div>
+
+                <!-- Zimoviste -->
+                <div class="gallery-item" data-category="zimoviste" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/zimoviste/20250227_122033.jpg" alt="Zimoviště - pohled">
+                    <div class="caption">Zimoviste - celkovy pohled</div>
+                </div>
+                <div class="gallery-item" data-category="zimoviste" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/zimoviste/20250227_122034.jpg" alt="Zimoviště - stado">
+                    <div class="caption">Stado na zimovisti</div>
+                </div>
+                <div class="gallery-item" data-category="zimoviste" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/zimoviste/20250227_122036.jpg" alt="Zimoviště - přístrešek">
+                    <div class="caption">Pristresek zimoviste</div>
+                </div>
+                <div class="gallery-item" data-category="zimoviste" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/zimoviste/20250227_122042(0).jpg" alt="Zimoviště - stádo u sena">
+                    <div class="caption">Stado u sena</div>
+                </div>
+                <div class="gallery-item" data-category="zimoviste" onclick="openLightbox(this.querySelector('img'))">
+                    <img src="assets/images/zimoviste/20250227_122047.jpg" alt="Zimoviště - detail">
+                    <div class="caption">Detail zimoviste</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== HARMONOGRAM ===== -->
+    <section id="harmonogram">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Harmonogram projektu</h2>
+                <p>Klicove milniky realizace 2026&ndash;2027</p>
+                <div class="section-divider"></div>
+            </div>
+            <div class="timeline">
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q1 2026</div>
+                        <h4>Zahajeni projektu</h4>
+                        <p>Instalace serverove infrastruktury na farme. Nasazeni AI kamer na perimetru zimoviste. Prvni sber dat.</p>
+                    </div>
+                </div>
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q2 2026</div>
+                        <h4>Nasazeni obojku</h4>
+                        <p>Výroba a nasazení GPS+akcelerometr obojku na vsechna zvirata. Kalibrace senzoru, validace datoveho toku.</p>
+                    </div>
+                </div>
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q3 2026</div>
+                        <h4>Letní monitoring</h4>
+                        <p>Monitoring na letnich pastvinach. Testovani klasifikace chovani v ruznych podminkach. Sber referencnich dat.</p>
+                    </div>
+                </div>
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q4 2026</div>
+                        <h4>Zimni sezona 2</h4>
+                        <p>Druha zimni sezona na zimovisti. Plny provoz vsech systemu. Optimalizace algoritmu detekce anomalii.</p>
+                    </div>
+                </div>
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q1 2027</div>
+                        <h4>Analyza a vyhodnoceni</h4>
+                        <p>Komplexni analyza rocnich dat. Validace prediktivnich modelu. Publikace prvnich vysledku.</p>
+                    </div>
+                </div>
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q2-Q3 2027</div>
+                        <h4>Diseminace</h4>
+                        <p>Prenos vysledku do praxe. Workshopy pro chovatele. Metodicke prirucky pro nasazeni technologii v ekologickem chovu.</p>
+                    </div>
+                </div>
+                <div class="timeline-item reveal">
+                    <div class="timeline-dot"></div>
+                    <div class="timeline-card">
+                        <div class="timeline-date">Q4 2027</div>
+                        <h4>Ukonceni projektu</h4>
+                        <p>Zaverecna zprava. Vyhodnoceni ekonomickeho přínosu. Doporuceni pro sirokou praxi v ekologickem chovu skotu.</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== KONTAKT ===== -->
+    <section id="kontakt">
+        <div class="container">
+            <div class="section-header reveal">
+                <h2>Kontakt</h2>
+                <div class="section-divider"></div>
+            </div>
+            <div class="contact-grid reveal">
+                <div class="contact-info">
+                    <h3>Ekofarma Pejcoch</h3>
+                    <div class="contact-item">
+                        <div class="contact-icon">&#x1F4CD;</div>
+                        <p><strong>Adresa</strong>Rumburk, Ustecky kraj, Ceska republika</p>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">&#x1F4E7;</div>
+                        <p><strong>Program</strong>2. vyzva EIP MZe<br>Operacni skupiny 53.77</p>
+                    </div>
+                    <div class="contact-item">
+                        <div class="contact-icon">&#x1F465;</div>
+                        <p><strong>Operacni skupina</strong>Ekofarma Pejcoch, Ceske radiokomunikace, Quanti, CZU/VU Uhrineves, KZP</p>
+                    </div>
+                </div>
+                <div class="contact-cta">
+                    <h3>Pristup k analyse</h3>
+                    <p>Pro cleny operacni skupiny je k dispozici zabezpeceny pristup k analytickym nastrojum a dashboardum.</p>
+                    <a href="login.html" class="btn-primary">Prihlasit se</a>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ===== FOOTER ===== -->
+    <footer class="footer">
+        <div class="container">
+            <p>Inteligentni pastvina &mdash; Ekofarma Pejcoch Rumburk &copy; 2026</p>
+            <p class="program">2. vyzva EIP MZe &mdash; Operacni skupiny, program 53.77</p>
+        </div>
+    </footer>
+
+    <!-- ===== LIGHTBOX ===== -->
+    <div class="lightbox" id="lightbox">
+        <button class="lightbox-close" onclick="closeLightbox()">&times;</button>
+        <img id="lightboxImg" src="" alt="">
+        <div class="lightbox-caption" id="lightboxCaption"></div>
+    </div>
+
+    <!-- ===== JAVASCRIPT ===== -->
+    <script>
+    (function() {
+        'use strict';
+
+        // === NAVBAR SCROLL ===
+        const navbar = document.getElementById('navbar');
+        window.addEventListener('scroll', function() {
+            navbar.classList.toggle('scrolled', window.scrollY > 50);
+        });
+
+        // === HAMBURGER ===
+        const hamburger = document.getElementById('hamburger');
+        const navLinks = document.getElementById('navLinks');
+
+        hamburger.addEventListener('click', function() {
+            navLinks.classList.toggle('open');
+        });
+
+        // Close mobile menu on link click
+        navLinks.querySelectorAll('a').forEach(function(link) {
+            link.addEventListener('click', function() {
+                navLinks.classList.remove('open');
+            });
+        });
+
+        // === SCROLL REVEAL ===
+        var reveals = document.querySelectorAll('.reveal');
+        var observer = new IntersectionObserver(function(entries) {
+            entries.forEach(function(entry) {
+                if (entry.isIntersecting) {
+                    entry.target.classList.add('visible');
+                }
+            });
+        }, { threshold: 0.1, rootMargin: '0px 0px -50px 0px' });
+
+        reveals.forEach(function(el) { observer.observe(el); });
+
+        // === GALLERY TABS ===
+        var tabs = document.querySelectorAll('.gallery-tab');
+        var items = document.querySelectorAll('.gallery-item');
+
+        tabs.forEach(function(tab) {
+            tab.addEventListener('click', function() {
+                tabs.forEach(function(t) { t.classList.remove('active'); });
+                tab.classList.add('active');
+
+                var filter = tab.getAttribute('data-filter');
+                items.forEach(function(item) {
+                    if (filter === 'all' || item.getAttribute('data-category') === filter) {
+                        item.removeAttribute('hidden');
+                    } else {
+                        item.setAttribute('hidden', '');
+                    }
+                });
+            });
+        });
+
+        // === MAP ===
+        var mapEl = document.getElementById('map-container');
+        if (mapEl) {
+            var map = L.map('map-container', {
+                center: [50.9509, 14.5690],
+                zoom: 18,
+                maxZoom: 20
+            });
+
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 20,
+                attribution: 'Esri World Imagery'
+            }).addTo(map);
+
+            // FENCE (perimeter)
+            var fenceCoords = [
+                [50.95118486126528, 14.568476248365942],
+                [50.951122967690054, 14.568944229981248],
+                [50.95110596337696, 14.569769665678512],
+                [50.95085841585557, 14.569742352646447],
+                [50.9506629398737, 14.569651351300477],
+                [50.95078866632813, 14.568954399565536],
+                [50.950522086837864, 14.568764090155774],
+                [50.950552701956866, 14.568605796527747],
+                [50.950481594058694, 14.568571961908164],
+                [50.95058529824113, 14.56830063042661],
+                [50.95118486126528, 14.568476248365942]
+            ];
+
+            L.polygon(fenceCoords, {
+                color: '#1565c0',
+                weight: 3,
+                fillColor: '#2196f3',
+                fillOpacity: 0.08,
+                dashArray: '8, 4'
+            }).addTo(map).bindPopup('<b>Perimetr ohrazeni</b><br>Zimoviste Ekofarmy Pejcoch');
+
+            // GREEN ZONES
+            var greenZones = [
+                { id: 'A', name: 'Zona A (seno/odpocinek)', coords: [
+                    [50.95100253318565, 14.56913314619357],
+                    [50.950929657400415, 14.569684665572959],
+                    [50.95072718552232, 14.569602381983431],
+                    [50.95082997448223, 14.569038373977783],
+                    [50.95100253318565, 14.56913314619357]
+                ]},
+                { id: 'B', name: 'Zona B', coords: [
+                    [50.95094066735911, 14.569731721519434],
+                    [50.95103252917777, 14.56911501310856],
+                    [50.95114406007115, 14.569167801829972],
+                    [50.951076411332316, 14.56974966035037],
+                    [50.95094066735911, 14.569731721519434]
+                ]},
+                { id: 'C', name: 'Zona C', coords: [
+                    [50.951158722470126, 14.568488075960094],
+                    [50.95112923469715, 14.56915899347603],
+                    [50.9510064172326, 14.569097260630663],
+                    [50.95104288426972, 14.568435834602127],
+                    [50.951158722470126, 14.568488075960094]
+                ]},
+                { id: 'D', name: 'Zona D', coords: [
+                    [50.951025907977986, 14.568450817048722],
+                    [50.95092224735413, 14.569052916117466],
+                    [50.95079054835145, 14.56896041868564],
+                    [50.95088643168499, 14.568398169013564],
+                    [50.951025907977986, 14.568450817048722]
+                ]},
+                { id: 'E', name: 'Zona E', coords: [
+                    [50.95085348632671, 14.568703916402923],
+                    [50.95083194414188, 14.569008328287833],
+                    [50.95053167273161, 14.568761055192946],
+                    [50.95055846742653, 14.568627186965646],
+                    [50.95085348632671, 14.568703916402923]
+                ]},
+                { id: 'F', name: 'Zona F', coords: [
+                    [50.95089402169651, 14.568395187125269],
+                    [50.950568018912826, 14.5683769812171],
+                    [50.95050661472083, 14.568593441817383],
+                    [50.950866791651, 14.568682785171358],
+                    [50.95089402169651, 14.568395187125269]
+                ]}
+            ];
+
+            greenZones.forEach(function(zone) {
+                L.polygon(zone.coords, {
+                    color: '#2e7d32',
+                    weight: 2,
+                    fillColor: '#4caf50',
+                    fillOpacity: 0.35
+                }).addTo(map).bindPopup('<b>GREEN ' + zone.id + '</b><br>' + zone.name);
+            });
+        }
+
+    })();
+
+    // === LIGHTBOX (global scope) ===
+    function openLightbox(imgEl) {
+        var lb = document.getElementById('lightbox');
+        var lbImg = document.getElementById('lightboxImg');
+        var lbCap = document.getElementById('lightboxCaption');
+        lbImg.src = imgEl.src;
+        lbCap.textContent = imgEl.alt;
+        lb.classList.add('active');
+    }
+
+    function closeLightbox() {
+        document.getElementById('lightbox').classList.remove('active');
+    }
+
+    document.getElementById('lightbox').addEventListener('click', function(e) {
+        if (e.target === this) closeLightbox();
+    });
+
+    document.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') closeLightbox();
+    });
+    </script>
+
+</body>
+</html>

@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+  <meta charset="utf-8">
+  <title>Clean Data Conclusion</title>
+  <style>
+    :root {
+      color-scheme: light dark;
+      font-family: "Segoe UI", Arial, sans-serif;
+      background-color: #0f172a;
+      color: #e2e8f0;
+    }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: linear-gradient(140deg, #0f172a, #1e1b4b 60%, #0f172a);
+    }
+    main {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 20px 48px;
+    }
+    h1 {
+      font-size: 2rem;
+      margin-bottom: 0.5rem;
+    }
+    h2 {
+      margin: 32px 0 16px;
+      font-size: 1.25rem;
+      color: #cbd5f5;
+    }
+    .meta {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 0.95rem;
+      color: #cbd5f5;
+      margin-bottom: 24px;
+    }
+    .meta span {
+      padding: 4px 12px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.2);
+    }
+    .cards {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+      gap: 16px;
+    }
+    .card {
+      background: rgba(15, 23, 42, 0.85);
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      border-radius: 16px;
+      padding: 18px;
+      box-shadow: 0 15px 35px rgba(0, 0, 0, 0.35);
+    }
+    .card h3 {
+      margin: 0;
+      font-size: 0.9rem;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      color: #94a3b8;
+    }
+    .card strong {
+      display: block;
+      margin-top: 12px;
+      font-size: 1.9rem;
+    }
+    .drop-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 16px;
+    }
+    .drop-item {
+      background: rgba(15, 23, 42, 0.75);
+      border-radius: 14px;
+      padding: 14px;
+      border: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    .drop-label {
+      font-size: 0.95rem;
+      color: #cbd5f5;
+    }
+    .drop-value {
+      font-weight: 600;
+      margin: 6px 0;
+    }
+    .drop-bar {
+      width: 100%;
+      height: 6px;
+      border-radius: 999px;
+      background: rgba(148, 163, 184, 0.25);
+      overflow: hidden;
+    }
+    .drop-bar span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, #38bdf8, #818cf8);
+    }
+    .table-wrapper {
+      background: rgba(15, 23, 42, 0.75);
+      border-radius: 18px;
+      border: 1px solid rgba(148, 163, 184, 0.2);
+      overflow: auto;
+      box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.9rem;
+      min-width: 720px;
+    }
+    th, td {
+      padding: 12px 16px;
+      text-align: left;
+      border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+    }
+    th {
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      font-size: 0.75rem;
+      color: #93c5fd;
+      position: sticky;
+      top: 0;
+      background: rgba(15, 23, 42, 0.95);
+    }
+    tbody tr:nth-child(every odd) {
+      background: rgba(148, 163, 184, 0.03);
+    }
+    .status-pill {
+      padding: 4px 10px;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      text-transform: uppercase;
+    }
+    .status-written {
+      background: rgba(34, 197, 94, 0.2);
+      color: #4ade80;
+    }
+    .status-skipped {
+      background: rgba(251, 191, 36, 0.25);
+      color: #fbbf24;
+    }
+    .status-no_data {
+      background: rgba(248, 113, 113, 0.2);
+      color: #f87171;
+    }
+    .empty-note {
+      padding: 20px;
+      border-radius: 14px;
+      background: rgba(248, 250, 252, 0.05);
+      border: 1px dashed rgba(148, 163, 184, 0.3);
+      color: #cbd5f5;
+    }
+    @media (max-width: 640px) {
+      body {
+        padding: 0;
+      }
+      .meta {
+        flex-direction: column;
+      }
+      .table-wrapper {
+        border-radius: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>Clean Data Conclusion</h1>
+      <p>Souhrn posledního běhu Konverze_Dat s detailní statistikou čištění CSV → JS datasetů.</p>
+    </header>
+
+    <div class="meta">
+      <span id="metaDates">Datumy: —</span>
+      <span id="metaCows">Krávy: —</span>
+      <span id="metaGenerated">Generováno: —</span>
+    </div>
+
+    <section class="cards">
+      <article class="card">
+        <h3>Datasetů</h3>
+        <strong id="cardDatasets">0</strong>
+      </article>
+      <article class="card">
+        <h3>Surové řádky</h3>
+        <strong id="cardRaw">0</strong>
+      </article>
+      <article class="card">
+        <h3>Čisté řádky</h3>
+        <strong id="cardCleaned">0</strong>
+      </article>
+      <article class="card">
+        <h3>Odstraněno</h3>
+        <strong id="cardRemoved">0</strong>
+      </article>
+    </section>
+
+    <section>
+      <h2>Rozpad odstraněných hodnot</h2>
+      <div id="dropStats" class="drop-grid empty-note">
+        N/A – zatím nebyla vygenerována žádná data.
+      </div>
+    </section>
+
+    <section>
+      <h2>Přehled datasetů</h2>
+      <div class="table-wrapper">
+        <table id="datasetTable">
+          <thead>
+            <tr>
+              <th>ID krávy</th>
+              <th>Datum</th>
+              <th>Status</th>
+              <th>Soubor</th>
+              <th>Surové</th>
+              <th>Čisté</th>
+              <th>Odstraněno</th>
+              <th>TS droppy</th>
+              <th>GPS droppy</th>
+              <th>ACC droppy</th>
+              <th>Poznámka</th>
+            </tr>
+          </thead>
+          <tbody>
+          </tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+
+  <script src="CleanData_summary.js"></script>
+  <script>
+    (function () {
+      const summary = window.CleanDataSummary || { totals: {}, datasets: [], dateRange: {}, cowsRequested: [] };
+      const totals = summary.totals || {};
+      const datasets = Array.isArray(summary.datasets) ? summary.datasets : [];
+
+      const formatNumber = (value) => {
+        const num = Number(value) || 0;
+        return num.toLocaleString('cs-CZ');
+      };
+
+      const firstDate = summary.dateRange?.from || '—';
+      const lastDate = summary.dateRange?.to || '—';
+      document.getElementById('metaDates').textContent = `Datumy: ${firstDate} – ${lastDate}`;
+      document.getElementById('metaCows').textContent = `Krávy: ${(summary.cowsRequested || []).join(', ') || '—'}`;
+      document.getElementById('metaGenerated').textContent = `Generováno: ${summary.generatedAt || '—'}`;
+
+      document.getElementById('cardDatasets').textContent = formatNumber(totals.datasetsProcessed);
+      document.getElementById('cardRaw').textContent = formatNumber(totals.rawRows);
+      document.getElementById('cardCleaned').textContent = formatNumber(totals.cleanedRows);
+      document.getElementById('cardRemoved').textContent = formatNumber(totals.removedRows);
+
+      renderDropStats(totals.dropStats || {}, totals.removedRows || 1);
+      renderDatasetTable(datasets);
+    })();
+
+    function renderDropStats(stats, denominator) {
+      const container = document.getElementById('dropStats');
+      container.classList.remove('empty-note');
+      container.innerHTML = '';
+
+      const labels = {
+        invalidTimestamps: 'Neplatné timestampy',
+        duplicateTimestamps: 'Duplicitní timestampy',
+        nonMonotonicTimestamps: 'Nemonotónní čas',
+        invalidCoordinates: 'Chybná GPS hodnota',
+        outOfBounds: 'Mimo farmu',
+        gpsJumpsRemoved: 'GPS skoky',
+        invalidAcceleration: 'Chybná akcelerace',
+        accelOutliersRemoved: 'Outliery akcelerace'
+      };
+
+      const entries = Object.keys(labels).map((key) => ({
+        key,
+        label: labels[key],
+        value: Number(stats[key] || 0)
+      }));
+
+      const totalRemoved = entries.reduce((sum, item) => sum + item.value, 0);
+      if (totalRemoved === 0) {
+        container.classList.add('empty-note');
+        container.textContent = 'Nebyla detekována žádná anomální hodnota.';
+        return;
+      }
+
+      entries.forEach((item) => {
+        const percent = denominator > 0 ? Math.min((item.value / denominator) * 100, 100) : 0;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'drop-item';
+        wrapper.innerHTML = `
+          <div class="drop-label">${item.label}</div>
+          <div class="drop-value">${item.value.toLocaleString('cs-CZ')}</div>
+          <div class="drop-bar"><span style="width:${percent}%"></span></div>
+        `;
+        container.appendChild(wrapper);
+      });
+    }
+
+    function renderDatasetTable(entries) {
+      const tbody = document.querySelector('#datasetTable tbody');
+      tbody.innerHTML = '';
+
+      if (!entries.length) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 11;
+        cell.textContent = 'Zatím nejsou k dispozici žádné záznamy.';
+        row.appendChild(cell);
+        tbody.appendChild(row);
+        return;
+      }
+
+      const sorted = entries.slice().sort((a, b) => {
+        const dateDiff = (a.date || '').localeCompare(b.date || '');
+        if (dateDiff !== 0) return dateDiff;
+        return (a.cowId || '').localeCompare(b.cowId || '');
+      });
+
+      sorted.forEach((item) => {
+        const stats = item.stats || {};
+        const tsDrops = (Number(stats.invalidTimestamps) || 0) + (Number(stats.duplicateTimestamps) || 0) + (Number(stats.nonMonotonicTimestamps) || 0);
+        const gpsDrops = (Number(stats.invalidCoordinates) || 0) + (Number(stats.outOfBounds) || 0) + (Number(stats.gpsJumpsRemoved) || 0);
+        const accDrops = (Number(stats.invalidAcceleration) || 0) + (Number(stats.accelOutliersRemoved) || 0);
+        const removed = Math.max((Number(item.rawRows) || 0) - (Number(item.cleanedRows) || 0), 0);
+
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${item.cowId || '—'}</td>
+          <td>${item.displayDate || item.date || '—'}</td>
+          <td><span class="status-pill ${statusClass(item.status)}">${item.status || 'unknown'}</span></td>
+          <td>${item.file || '—'}</td>
+          <td>${formatNumber(item.rawRows)}</td>
+          <td>${formatNumber(item.cleanedRows)}</td>
+          <td>${formatNumber(removed)}</td>
+          <td>${formatNumber(tsDrops)}</td>
+          <td>${formatNumber(gpsDrops)}</td>
+          <td>${formatNumber(accDrops)}</td>
+          <td>${item.reason || ''}</td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function statusClass(status) {
+      switch ((status || '').toLowerCase()) {
+        case 'written':
+          return 'status-written';
+        case 'no_data':
+          return 'status-no_data';
+        default:
+          return 'status-skipped';
+      }
+    }
+
+    function formatNumber(value) {
+      const num = Number(value) || 0;
+      return num.toLocaleString('cs-CZ');
+    }
+  </script>
+</body>
+</html>
